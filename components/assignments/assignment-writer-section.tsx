@@ -36,6 +36,7 @@ export function AssignmentWriterSection({
 }: AssignmentWriterSectionProps) {
   const assignedWriterIds = allocations.map((allocation) => allocation.worker_id);
   const viewWriterCost = getFinancialSummaryNumber(financialSummary, [
+    "worker_cost",
     "writer_cost",
     "total_writer_cost",
   ]);

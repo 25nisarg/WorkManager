@@ -31,7 +31,7 @@ const navigation: NavItem[] = [
   { label: "Contacts", href: "/contacts", icon: ContactRound, available: true },
   { label: "Writers", href: "/writers", icon: UsersRound },
   { label: "Payments", href: "/payments", icon: Banknote, available: true },
-  { label: "Expenses", href: "/expenses", icon: ReceiptText },
+  { label: "Expenses", href: "/expenses", icon: ReceiptText, available: true },
   { label: "Deadlines", href: "/deadlines", icon: CalendarClock },
   { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
 ];
@@ -126,19 +126,18 @@ export function AppSidebar({ collapsed, mobileOpen, onCloseMobile, onToggleColla
         </nav>
 
         <div className="border-t border-slate-200 p-3">
-          <div
-            aria-disabled="true"
-            className={"flex h-10 cursor-not-allowed items-center rounded-lg text-sm font-medium text-slate-400 " + (collapsed ? "justify-center px-2" : "gap-3 px-3")}
-            title={collapsed ? "Settings — coming soon" : undefined}
+          <Link
+            href="/settings"
+            onClick={onCloseMobile}
+            aria-current={pathname === "/settings" || pathname.startsWith("/settings/") ? "page" : undefined}
+            className={"flex h-10 items-center rounded-lg text-sm font-medium transition " + (collapsed ? "justify-center px-2" : "gap-3 px-3") + " " + (pathname === "/settings" || pathname.startsWith("/settings/") ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950")}
+            title={collapsed ? "Settings" : undefined}
           >
             <Settings aria-hidden="true" className="size-4.5 shrink-0" />
             {!collapsed && (
-              <>
-                <span>Settings</span>
-                <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Soon</span>
-              </>
+              <span>Settings</span>
             )}
-          </div>
+          </Link>
           <button
             type="button"
             onClick={onToggleCollapsed}

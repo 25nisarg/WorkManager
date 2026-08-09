@@ -109,7 +109,7 @@ export async function getPaymentsData(
       .eq("owner_id", ownerId),
     supabase
       .from("payment_accounts")
-      .select("*")
+      .select("id, account_name, is_active")
       .eq("owner_id", ownerId),
   ]);
 

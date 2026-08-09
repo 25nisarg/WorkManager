@@ -1,10 +1,8 @@
-import type { LucideIcon } from "lucide-react";
 import {
   Banknote,
   CalendarDays,
   CircleUserRound,
   FileText,
-  ReceiptText,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DataError } from "@/components/ui/data-error";
@@ -15,31 +13,6 @@ import type {
   Assignment,
   AssignmentFinancialSummary,
 } from "@/types/assignment";
-
-function FutureSection({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-          <Icon aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h2 className="font-semibold text-slate-900">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
-          <span className="mt-3 inline-flex rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">Future phase</span>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 export function AssignmentDetails({
   assignment,
@@ -54,10 +27,11 @@ export function AssignmentDetails({
     { label: "Selling price", value: assignment.selling_price },
     { label: "Client received", value: getFinancialSummaryNumber(financialSummary, ["client_received", "total_received", "amount_received"]) },
     { label: "Client outstanding", value: getFinancialSummaryNumber(financialSummary, ["client_outstanding", "outstanding_amount"]) },
-    { label: "Writer cost", value: getFinancialSummaryNumber(financialSummary, ["writer_cost", "total_writer_cost"]) },
+    { label: "Writer cost", value: getFinancialSummaryNumber(financialSummary, ["worker_cost", "writer_cost", "total_writer_cost"]) },
     { label: "Writer paid", value: getFinancialSummaryNumber(financialSummary, ["writer_paid", "total_writer_paid"]) },
     { label: "Writer payable", value: getFinancialSummaryNumber(financialSummary, ["writer_payable"]) },
     { label: "Expected gross profit", value: getFinancialSummaryNumber(financialSummary, ["expected_gross_profit", "gross_profit"]) },
+    { label: "Assignment expenses", value: getFinancialSummaryNumber(financialSummary, ["other_expenses"]) },
     { label: "Expected net profit", value: getFinancialSummaryNumber(financialSummary, ["expected_net_profit", "net_profit"]) },
     { label: "Current cash margin", value: getFinancialSummaryNumber(financialSummary, ["current_cash_margin", "current_cash_flow"]) },
   ];
@@ -128,10 +102,6 @@ export function AssignmentDetails({
         </div>
       </Card>
       {financialError && <DataError message={financialError} />}
-
-      <div className="grid gap-6">
-        <FutureSection icon={ReceiptText} title="Expenses" description="Assignment-specific expenses will appear here." />
-      </div>
 
       <Card className="p-5">
         <div className="flex items-center gap-3">

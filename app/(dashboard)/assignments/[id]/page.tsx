@@ -10,11 +10,13 @@ import {
 import { AssignmentDetails } from "@/components/assignments/assignment-details";
 import { AssignmentWriterSection } from "@/components/assignments/assignment-writer-section";
 import { AssignmentPaymentsSection } from "@/components/payments/assignment-payments-section";
+import { AssignmentExpensesSection } from "@/components/expenses/assignment-expenses-section";
 import { DeleteAssignmentDialog } from "@/components/assignments/delete-assignment-dialog";
 import { DataError } from "@/components/ui/data-error";
 import { getAssignment } from "@/lib/queries/assignments";
 import { getAssignmentWorkers } from "@/lib/queries/assignment-workers";
 import { getPaymentsData } from "@/lib/queries/payments";
+import { getExpensesData } from "@/lib/queries/expenses";
 import { requireAuthenticatedOwnerId } from "@/lib/supabase/auth";
 import { assignmentIdSchema } from "@/lib/validations/assignment";
 
@@ -29,10 +31,11 @@ export default async function AssignmentDetailPage({
   if (!assignmentIdSchema.safeParse(id).success) notFound();
 
   const ownerId = await requireAuthenticatedOwnerId();
-  const [result, workerResult, paymentResult] = await Promise.all([
+  const [result, workerResult, paymentResult, expenseResult] = await Promise.all([
     getAssignment(ownerId, id),
     getAssignmentWorkers(ownerId, id),
     getPaymentsData(ownerId, { assignmentId: id }),
+    getExpensesData(ownerId, { assignmentId: id }),
   ]);
   if (!result.error && !result.assignment) notFound();
 
@@ -73,6 +76,11 @@ export default async function AssignmentDetailPage({
           <AssignmentPaymentsSection
             assignment={result.assignment}
             payments={paymentResult}
+          />
+          <AssignmentExpensesSection
+            assignmentId={id}
+            currency={result.assignment.currency}
+            data={expenseResult}
           />
           <AssignmentDetails
             assignment={result.assignment}

@@ -206,6 +206,7 @@ export async function getAssignment(
     supabase
       .from("assignment_financial_summary")
       .select("*")
+      .eq("owner_id", ownerId)
       .eq("assignment_id", assignmentId)
       .maybeSingle(),
   ]);

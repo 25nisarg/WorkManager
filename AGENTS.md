@@ -1,5 +1,19 @@
 # Freelance Manager - Codex Project Instructions
 
+## Database Source of Truth
+
+Before writing or modifying ANY Supabase query, mutation, type, or form mapping, read:
+
+`DATABASE_SCHEMA.md`
+
+`DATABASE_SCHEMA.md` is the authoritative description of the existing production database structure.
+
+Never guess database column names.
+
+If code and `DATABASE_SCHEMA.md` disagree, treat `DATABASE_SCHEMA.md` as authoritative and report the discrepancy.
+
+Do not alter the database merely to accommodate an incorrectly guessed application field name.
+
 ## 1. Project Purpose
 
 Freelance Manager is a secure web application for managing freelance academic/technical work.
