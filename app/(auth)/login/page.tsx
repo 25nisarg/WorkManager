@@ -13,7 +13,7 @@ export default function LoginPage() {
           <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
             <BriefcaseBusiness aria-hidden="true" className="size-5" />
           </span>
-          <span className="text-lg font-semibold tracking-tight text-slate-950">Freelance Manager</span>
+          <span className="text-lg font-semibold tracking-tight text-slate-950">Work Manager</span>
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="login-heading">

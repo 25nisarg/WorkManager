@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Freelance Manager",
-    template: "%s | Freelance Manager",
+    default: "Work Manager",
+    template: "%s | Work Manager",
   },
   description: "Manage freelance work, deadlines, payments, and profitability.",
 };

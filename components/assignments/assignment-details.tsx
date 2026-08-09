@@ -4,9 +4,7 @@ import {
   CalendarDays,
   CircleUserRound,
   FileText,
-  HandCoins,
   ReceiptText,
-  WalletCards,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { DataError } from "@/components/ui/data-error";
@@ -57,10 +55,11 @@ export function AssignmentDetails({
     { label: "Client received", value: getFinancialSummaryNumber(financialSummary, ["client_received", "total_received", "amount_received"]) },
     { label: "Client outstanding", value: getFinancialSummaryNumber(financialSummary, ["client_outstanding", "outstanding_amount"]) },
     { label: "Writer cost", value: getFinancialSummaryNumber(financialSummary, ["writer_cost", "total_writer_cost"]) },
+    { label: "Writer paid", value: getFinancialSummaryNumber(financialSummary, ["writer_paid", "total_writer_paid"]) },
     { label: "Writer payable", value: getFinancialSummaryNumber(financialSummary, ["writer_payable"]) },
-    { label: "Assignment expenses", value: getFinancialSummaryNumber(financialSummary, ["assignment_expenses", "total_expenses"]) },
+    { label: "Expected gross profit", value: getFinancialSummaryNumber(financialSummary, ["expected_gross_profit", "gross_profit"]) },
     { label: "Expected net profit", value: getFinancialSummaryNumber(financialSummary, ["expected_net_profit", "net_profit"]) },
-    { label: "Current cash flow", value: getFinancialSummaryNumber(financialSummary, ["current_cash_flow"]) },
+    { label: "Current cash margin", value: getFinancialSummaryNumber(financialSummary, ["current_cash_margin", "current_cash_flow"]) },
   ];
 
   return (
@@ -130,9 +129,7 @@ export function AssignmentDetails({
       </Card>
       {financialError && <DataError message={financialError} />}
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <FutureSection icon={WalletCards} title="Client payments" description="Payments received for this assignment will appear here." />
-        <FutureSection icon={HandCoins} title="Writer payments" description="Writer payment transactions will appear here." />
+      <div className="grid gap-6">
         <FutureSection icon={ReceiptText} title="Expenses" description="Assignment-specific expenses will appear here." />
       </div>
 

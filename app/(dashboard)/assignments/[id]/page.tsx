@@ -9,10 +9,12 @@ import {
 } from "@/components/assignments/assignment-badges";
 import { AssignmentDetails } from "@/components/assignments/assignment-details";
 import { AssignmentWriterSection } from "@/components/assignments/assignment-writer-section";
+import { AssignmentPaymentsSection } from "@/components/payments/assignment-payments-section";
 import { DeleteAssignmentDialog } from "@/components/assignments/delete-assignment-dialog";
 import { DataError } from "@/components/ui/data-error";
 import { getAssignment } from "@/lib/queries/assignments";
 import { getAssignmentWorkers } from "@/lib/queries/assignment-workers";
+import { getPaymentsData } from "@/lib/queries/payments";
 import { requireAuthenticatedOwnerId } from "@/lib/supabase/auth";
 import { assignmentIdSchema } from "@/lib/validations/assignment";
 
@@ -27,9 +29,10 @@ export default async function AssignmentDetailPage({
   if (!assignmentIdSchema.safeParse(id).success) notFound();
 
   const ownerId = await requireAuthenticatedOwnerId();
-  const [result, workerResult] = await Promise.all([
+  const [result, workerResult, paymentResult] = await Promise.all([
     getAssignment(ownerId, id),
     getAssignmentWorkers(ownerId, id),
+    getPaymentsData(ownerId, { assignmentId: id }),
   ]);
   if (!result.error && !result.assignment) notFound();
 
@@ -66,6 +69,10 @@ export default async function AssignmentDetailPage({
             eligibleWriters={workerResult.data.eligibleWriters}
             financialSummary={result.financialSummary}
             error={workerResult.error}
+          />
+          <AssignmentPaymentsSection
+            assignment={result.assignment}
+            payments={paymentResult}
           />
           <AssignmentDetails
             assignment={result.assignment}

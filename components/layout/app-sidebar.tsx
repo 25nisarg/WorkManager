@@ -30,7 +30,7 @@ const navigation: NavItem[] = [
   { label: "Assignments", href: "/assignments", icon: BriefcaseBusiness, available: true },
   { label: "Contacts", href: "/contacts", icon: ContactRound, available: true },
   { label: "Writers", href: "/writers", icon: UsersRound },
-  { label: "Payments", href: "/payments", icon: Banknote },
+  { label: "Payments", href: "/payments", icon: Banknote, available: true },
   { label: "Expenses", href: "/expenses", icon: ReceiptText },
   { label: "Deadlines", href: "/deadlines", icon: CalendarClock },
   { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
@@ -70,7 +70,7 @@ export function AppSidebar({ collapsed, mobileOpen, onCloseMobile, onToggleColla
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
               <BriefcaseBusiness aria-hidden="true" className="size-4.5" />
             </span>
-            {!collapsed && <span className="truncate text-sm font-semibold tracking-tight text-slate-950">Freelance Manager</span>}
+            {!collapsed && <span className="truncate text-sm font-semibold tracking-tight text-slate-950">Work Manager</span>}
           </Link>
           <button
             type="button"
