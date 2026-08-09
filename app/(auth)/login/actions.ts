@@ -10,20 +10,13 @@ export async function login(formData: FormData) {
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    return {
-      error: 'Email and password are required.',
-    }
+    return { error: 'Email and password are required.' }
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    return {
-      error: error.message,
-    }
+    return { error: error.message }
   }
 
   redirect('/dashboard')
