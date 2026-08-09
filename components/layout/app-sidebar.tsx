@@ -27,7 +27,7 @@ type NavItem = {
 
 const navigation: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: CircleGauge, available: true },
-  { label: "Assignments", href: "/assignments", icon: BriefcaseBusiness },
+  { label: "Assignments", href: "/assignments", icon: BriefcaseBusiness, available: true },
   { label: "Contacts", href: "/contacts", icon: ContactRound, available: true },
   { label: "Writers", href: "/writers", icon: UsersRound },
   { label: "Payments", href: "/payments", icon: Banknote },
