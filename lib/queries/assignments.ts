@@ -7,8 +7,15 @@ import type {
   AssignmentStatus,
   WorkMode,
 } from "@/types/assignment";
+import { normalizeAssignmentStatus } from "@/lib/utils/status";
 
-type AssignmentRow = Omit<Assignment, "received_from" | "deadline_state">;
+type AssignmentRow = Omit<Assignment, "received_from" | "deadline_state" | "status"> & {
+  status: string;
+};
+type NormalizedAssignmentRow = Omit<
+  Assignment,
+  "received_from" | "deadline_state"
+>;
 
 type AssignmentFilters = {
   search?: string;
@@ -34,12 +41,13 @@ const assignmentColumns =
 
 const contactColumns = "id, name, company_name, is_active";
 
-function normalizeRow(row: AssignmentRow): AssignmentRow {
+function normalizeRow(row: AssignmentRow): NormalizedAssignmentRow {
   return {
     ...row,
     number_of_copies: Number(row.number_of_copies),
     price_per_copy: Number(row.price_per_copy),
     selling_price: Number(row.selling_price),
+    status: normalizeAssignmentStatus(row.status),
   };
 }
 
@@ -50,11 +58,18 @@ function attachContacts(
   const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
   const now = Date.now();
 
-  return rows.map((row) => ({
-    ...normalizeRow(row),
-    received_from: contactsById.get(row.received_from_id) ?? null,
-    deadline_state: getDeadlineState(row.client_deadline, row.status, now),
-  }));
+  return rows.map((row) => {
+    const normalized = normalizeRow(row);
+    return {
+    ...normalized,
+    received_from: contactsById.get(normalized.received_from_id) ?? null,
+    deadline_state: getDeadlineState(
+      normalized.client_deadline,
+      normalized.status,
+      now
+    ),
+  };
+  });
 }
 
 function getDeadlineState(
@@ -62,7 +77,7 @@ function getDeadlineState(
   status: AssignmentStatus,
   now: number
 ): DeadlineState {
-  if (["delivered", "completed", "cancelled"].includes(status)) {
+  if (["delivered", "cancelled"].includes(status)) {
     return "closed";
   }
 

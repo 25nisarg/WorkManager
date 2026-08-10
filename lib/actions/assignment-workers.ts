@@ -155,6 +155,16 @@ function invalidState(
   return { values, fieldErrors };
 }
 
+function revalidateAllocationConsumers(assignmentId: string, writerId?: string) {
+  revalidatePath("/assignments/" + assignmentId);
+  revalidatePath("/writers");
+  revalidatePath("/writers/[id]", "page");
+  if (writerId) revalidatePath("/writers/" + writerId);
+  revalidatePath("/dashboard");
+  revalidatePath("/deadlines");
+  revalidatePath("/reports");
+}
+
 export async function createAssignmentWorker(
   assignmentId: string,
   _previousState: AssignmentWorkerActionState,
@@ -235,7 +245,7 @@ export async function createAssignmentWorker(
     return { error: databaseMessage(error, "save"), values };
   }
 
-  revalidatePath("/assignments/" + assignmentIdResult.data);
+  revalidateAllocationConsumers(assignmentIdResult.data, parsed.data.worker_id);
   redirect("/assignments/" + assignmentIdResult.data);
 }
 
@@ -310,7 +320,7 @@ export async function updateAssignmentWorker(
 
   const payload = allocationPayload(parsed.data);
   payload.assigned_date = allocationResult.data.assigned_date;
-  payload.delivered_at = ["delivered", "completed"].includes(parsed.data.status)
+  payload.delivered_at = parsed.data.status === "delivered"
     ? allocationResult.data.delivered_at ?? new Date().toISOString()
     : null;
 
@@ -333,7 +343,7 @@ export async function updateAssignmentWorker(
     return { error: databaseMessage(error, "save"), values };
   }
 
-  revalidatePath("/assignments/" + assignmentIdResult.data);
+  revalidateAllocationConsumers(assignmentIdResult.data, parsed.data.worker_id);
   redirect("/assignments/" + assignmentIdResult.data);
 }
 
@@ -394,6 +404,6 @@ export async function deleteAssignmentWorker(
     return { error: databaseMessage(error, "delete") };
   }
 
-  revalidatePath("/assignments/" + assignmentIdResult.data);
+  revalidateAllocationConsumers(assignmentIdResult.data);
   redirect("/assignments/" + assignmentIdResult.data);
 }

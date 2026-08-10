@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { addCurrencyAmount, currencyAmounts, groupCurrencyAmounts, numberValue, subtractCurrencyAmounts } from "@/lib/utils/currency";
 import { calculateAssignmentInrFinancials } from "@/lib/utils/financial-model";
-import type { AssignmentPriority, AssignmentStatus } from "@/types/assignment";
+import { isActiveAssignmentStatus, normalizeAssignmentStatus } from "@/lib/utils/status";
+import type { AssignmentPriority } from "@/types/assignment";
 import type { ClientOutstandingItem, DashboardAssignment, DashboardData, DashboardDeadline, DashboardSummary, DeadlineGroup, MonthlyCashPoint, WriterPayableItem } from "@/types/dashboard";
 
 type AssignmentRow = Omit<DashboardAssignment, "client_name" | "selling_price"> & { selling_price: number | string };
@@ -60,7 +61,7 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
   }
 
   const contacts = new Map(((contactResult.data ?? []) as ContactRow[]).map((row) => [row.id, row.name]));
-  const assignments: DashboardAssignment[] = ((assignmentResult.data ?? []) as AssignmentRow[]).map((row) => ({ ...row, selling_price: numberValue(row.selling_price), status: row.status as AssignmentStatus, priority: row.priority as AssignmentPriority, client_name: row.received_from_id ? contacts.get(row.received_from_id) ?? null : null }));
+  const assignments: DashboardAssignment[] = ((assignmentResult.data ?? []) as AssignmentRow[]).map((row) => ({ ...row, selling_price: numberValue(row.selling_price), status: normalizeAssignmentStatus(row.status), priority: row.priority as AssignmentPriority, client_name: row.received_from_id ? contacts.get(row.received_from_id) ?? null : null }));
   const assignmentsById = new Map(assignments.map((row) => [row.id, row]));
   const workers = (workerResult.data ?? []) as WorkerRow[];
   const clientPayments = (clientPaymentResult.data ?? []) as ClientPaymentRow[];
@@ -68,7 +69,6 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
   const clientPaymentsById = new Map(clientPayments.map((row) => [row.id, row]));
   const workerPayments = (workerPaymentResult.data ?? []) as WorkerPaymentRow[];
   const expenses = (expenseResult.data ?? []) as ExpenseRow[];
-  const activeStatuses = new Set(["new", "assigned", "in_progress", "writer_delivered", "under_review", "ready_to_deliver", "revision"]);
   const activeWorkers = workers.filter((row) => row.status !== "cancelled");
 
   const receivedByAssignment = new Map<string, number>();
@@ -123,7 +123,7 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
   const currentCashPositionInr = excludedNonInrCashOut > 0 ? null : actualInrReceived - inrWorkerPaid - inrExpenses;
   const summary: DashboardSummary | null = failed ? null : {
     total_assignments: assignments.length,
-    active_assignments: assignments.filter((row) => activeStatuses.has(row.status)).length,
+    active_assignments: assignments.filter((row) => isActiveAssignmentStatus(row.status)).length,
     total_work_value: groupCurrencyAmounts(assignments.filter((row) => row.status !== "cancelled"), (row) => row.currency, (row) => row.selling_price),
     original_client_received: groupCurrencyAmounts(clientPayments, (row) => row.currency_original, (row) => row.amount_original),
     actual_inr_received: actualInrReceived,
@@ -140,7 +140,7 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
   };
 
   const now = new Date();
-  const deadlines: DashboardDeadline[] = assignments.filter((row) => row.client_deadline && activeStatuses.has(row.status)).sort((a, b) => a.client_deadline!.localeCompare(b.client_deadline!)).slice(0, 8).map((row) => ({ ...row, deadline_group: deadlineGroup(row.client_deadline!, now) }));
+  const deadlines: DashboardDeadline[] = assignments.filter((row) => row.client_deadline && isActiveAssignmentStatus(row.status)).sort((a, b) => a.client_deadline!.localeCompare(b.client_deadline!)).slice(0, 8).map((row) => ({ ...row, deadline_group: deadlineGroup(row.client_deadline!, now) }));
   const outstandingClients: ClientOutstandingItem[] = assignments.map((assignment) => ({ assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.client_name, client_deadline: assignment.client_deadline, currency: assignment.currency, selling_price: assignment.selling_price, client_received: receivedByAssignment.get(assignment.id) ?? 0, client_outstanding: Math.max(assignment.selling_price - (receivedByAssignment.get(assignment.id) ?? 0), 0), unmatched_payment_count: unmatchedByAssignment.get(assignment.id) ?? 0 })).filter((row) => row.client_outstanding > 0).sort((a, b) => (a.client_deadline ?? "9999").localeCompare(b.client_deadline ?? "9999")).slice(0, 6);
 
   const workerNames = new Map<string, string[]>();

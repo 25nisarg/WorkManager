@@ -3,8 +3,11 @@ import type {
   AssignmentWorker,
   EligibleWriter,
 } from "@/types/assignment-worker";
+import { normalizeAssignmentWorkerStatus } from "@/lib/utils/status";
 
-type AssignmentWorkerRow = Omit<AssignmentWorker, "worker">;
+type AssignmentWorkerRow = Omit<AssignmentWorker, "worker" | "status"> & {
+  status: string;
+};
 
 type WriterRoleRow = {
   contact_id: string;
@@ -127,6 +130,7 @@ export async function getAssignmentWorkers(
         (allocation) => ({
           ...allocation,
           agreed_cost: Number(allocation.agreed_cost),
+          status: normalizeAssignmentWorkerStatus(allocation.status),
           worker: writersById.get(allocation.worker_id) ?? null,
         })
       ),

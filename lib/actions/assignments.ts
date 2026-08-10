@@ -124,6 +124,16 @@ async function authenticatedMutationContext() {
   return { supabase, user: error ? null : user };
 }
 
+function revalidateAssignmentConsumers(assignmentId?: string) {
+  revalidatePath("/assignments");
+  if (assignmentId) revalidatePath("/assignments/" + assignmentId);
+  revalidatePath("/writers");
+  revalidatePath("/writers/[id]", "page");
+  revalidatePath("/dashboard");
+  revalidatePath("/deadlines");
+  revalidatePath("/reports");
+}
+
 async function ownedContactExists(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ownerId: string,
@@ -203,7 +213,7 @@ export async function createAssignment(
     };
   }
 
-  revalidatePath("/assignments");
+  revalidateAssignmentConsumers(assignment.id);
   redirect("/assignments/" + assignment.id);
 }
 
@@ -271,8 +281,7 @@ export async function updateAssignment(
     return { error: databaseMessage(error, "save"), values };
   }
 
-  revalidatePath("/assignments");
-  revalidatePath("/assignments/" + idResult.data);
+  revalidateAssignmentConsumers(idResult.data);
   redirect("/assignments/" + idResult.data);
 }
 
@@ -320,6 +329,6 @@ export async function deleteAssignment(
     return { error: databaseMessage(error, "delete") };
   }
 
-  revalidatePath("/assignments");
+  revalidateAssignmentConsumers(idResult.data);
   redirect("/assignments");
 }

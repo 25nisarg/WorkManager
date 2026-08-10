@@ -1,11 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { addCurrencyAmount, currencyAmounts, groupCurrencyAmounts, numberValue, subtractCurrencyAmounts } from "@/lib/utils/currency";
 import { calculateAssignmentInrFinancials } from "@/lib/utils/financial-model";
+import {
+  isCompletedWriterAllocation,
+  normalizeAssignmentStatus,
+} from "@/lib/utils/status";
 import type { WorkMode } from "@/types/assignment";
 import type { CurrencyAmount } from "@/types/financial";
 import type { ClientPerformance, MonthlyPerformance, ReportData, ReportPreset, ReportRange, SourcePerformance, WorkModePerformance, WriterPerformance } from "@/types/report";
 
-type AssignmentRow = { id: string; received_from_id: string | null; received_date: string; selling_price: number | string; currency: string; work_mode: WorkMode };
+type AssignmentRow = { id: string; received_from_id: string | null; received_date: string; selling_price: number | string; currency: string; work_mode: WorkMode; status: string };
 type ContactRow = { id: string; name: string };
 type RoleRow = { contact_id: string; role: string };
 type WorkerRow = { id: string; assignment_id: string; worker_id: string; assigned_date: string; agreed_cost: number | string; currency: string; status: string };
@@ -39,7 +43,7 @@ function addToArray(values: CurrencyAmount[], currency: string, amount: number |
 export async function getReportData(ownerId: string, range: ReportRange): Promise<ReportData> {
   const supabase = await createClient();
   const [assignmentResult, contactResult, roleResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult] = await Promise.all([
-    supabase.from("assignments").select("id, received_from_id, received_date, selling_price, currency, work_mode").eq("owner_id", ownerId),
+    supabase.from("assignments").select("id, received_from_id, received_date, selling_price, currency, work_mode, status").eq("owner_id", ownerId),
     supabase.from("contacts").select("id, name").eq("owner_id", ownerId),
     supabase.from("contact_roles").select("contact_id, role").eq("owner_id", ownerId),
     supabase.from("assignment_workers").select("id, assignment_id, worker_id, assigned_date, agreed_cost, currency, status").eq("owner_id", ownerId),
@@ -52,10 +56,10 @@ export async function getReportData(ownerId: string, range: ReportRange): Promis
   const emptySummary = { total_work_value: [], original_client_received: [], actual_inr_received: 0, client_outstanding: [], worker_cost: [], worker_paid: [], worker_payable: [], expenses: [], actual_profit_inr: null, current_cash_position_inr: null, profit_unavailable_assignments: 0, unmatched_client_payments: 0 };
   if (failed?.error) { console.error("[reports query failed]", { errorCode: failed.error.code, errorMessage: failed.error.message }); return { range, summary: emptySummary, monthly: [], sources: [], clients: [], writers: [], workModes: [], excludedNonInrCashOut: 0, error: "We could not load reports. Please refresh and try again." }; }
 
-  const allAssignments = (assignmentResult.data ?? []) as AssignmentRow[]; const assignments = allAssignments.filter((row) => inRange(row.received_date, range)); const assignmentIds = new Set(assignments.map((row) => row.id));
+  const allAssignments = ((assignmentResult.data ?? []) as AssignmentRow[]).map((row) => ({ ...row, status: normalizeAssignmentStatus(row.status) })); const assignments = allAssignments.filter((row) => inRange(row.received_date, range) && row.status !== "cancelled"); const assignmentIds = new Set(assignments.map((row) => row.id));
   const contacts = (contactResult.data ?? []) as ContactRow[]; const names = new Map(contacts.map((row) => [row.id, row.name])); const rolesByContact = new Map<string, Set<string>>();
   for (const row of (roleResult.data ?? []) as RoleRow[]) { const values = rolesByContact.get(row.contact_id) ?? new Set<string>(); values.add(row.role); rolesByContact.set(row.contact_id, values); }
-  const allWorkers = (workerResult.data ?? []) as WorkerRow[]; const assignmentWorkers = allWorkers.filter((row) => assignmentIds.has(row.assignment_id) && row.status !== "cancelled"); const rangedWorkers = allWorkers.filter((row) => inRange(row.assigned_date, range) && row.status !== "cancelled"); const rangedWorkerIds = new Set(rangedWorkers.map((row) => row.id));
+  const reportAssignmentIds = new Set(allAssignments.filter((row) => row.status !== "cancelled").map((row) => row.id)); const allWorkers = (workerResult.data ?? []) as WorkerRow[]; const assignmentWorkers = allWorkers.filter((row) => assignmentIds.has(row.assignment_id) && row.status !== "cancelled"); const rangedWorkers = allWorkers.filter((row) => reportAssignmentIds.has(row.assignment_id) && inRange(row.assigned_date, range) && row.status !== "cancelled"); const rangedWorkerIds = new Set(rangedWorkers.map((row) => row.id));
   const allClientPayments = (clientPaymentResult.data ?? []) as ClientPaymentRow[]; const rangedClientPayments = allClientPayments.filter((row) => inRange(row.payment_date, range)); const paymentsById = new Map(allClientPayments.map((row) => [row.id, row])); const rangedPaymentIds = new Set(rangedClientPayments.map((row) => row.id)); const allClientAllocations = (clientAllocationResult.data ?? []) as ClientAllocationRow[]; const rangedClientAllocations = allClientAllocations.filter((row) => rangedPaymentIds.has(row.client_payment_id));
   const allWorkerPayments = (workerPaymentResult.data ?? []) as WorkerPaymentRow[]; const rangedWorkerPayments = allWorkerPayments.filter((row) => inRange(row.payment_date, range)); const payableWorkerPayments = allWorkerPayments.filter((row) => rangedWorkerIds.has(row.assignment_worker_id) && row.payment_date <= range.end);
   const allExpenses = (expenseResult.data ?? []) as ExpenseRow[]; const rangedExpenses = allExpenses.filter((row) => inRange(row.expense_date, range));
@@ -85,7 +89,7 @@ export async function getReportData(ownerId: string, range: ReportRange): Promis
   for (const row of assignments) { const source = sourceFor(rolesByContact.get(row.received_from_id ?? "") ?? new Set()); const sourceRow = sourceMap.get(source) ?? { source, assignment_count: 0, work_value: [] }; sourceRow.assignment_count += 1; sourceRow.work_value = addToArray(sourceRow.work_value, row.currency, row.selling_price); sourceMap.set(source, sourceRow); if (row.received_from_id) { const client = clientMap.get(row.received_from_id) ?? { contact_id: row.received_from_id, name: names.get(row.received_from_id) ?? "Unavailable contact", assignment_count: 0, work_value: [], payments_received: [], client_outstanding: [] }; client.assignment_count += 1; client.work_value = addToArray(client.work_value, row.currency, row.selling_price); const matching = allClientAllocations.filter((allocation) => allocation.assignment_id === row.id && paymentsById.get(allocation.client_payment_id)?.currency_original === row.currency); client.payments_received = addToArray(client.payments_received, row.currency, matching.reduce((sum, allocation) => sum + numberValue(allocation.amount_original), 0)); client.client_outstanding = addToArray(client.client_outstanding, row.currency, Math.max(numberValue(row.selling_price) - matching.reduce((sum, allocation) => sum + numberValue(allocation.amount_original), 0), 0)); clientMap.set(row.received_from_id, client); } }
 
   const writerMap = new Map<string, WriterPerformance>();
-  for (const row of rangedWorkers) { const writer = writerMap.get(row.worker_id) ?? { writer_id: row.worker_id, name: names.get(row.worker_id) ?? "Unavailable writer", assigned_tasks: 0, completed_tasks: 0, agreed_cost: [], amount_paid: [], amount_payable: [] }; writer.assigned_tasks += 1; if (row.status === "completed" || row.status === "delivered") writer.completed_tasks += 1; writer.agreed_cost = addToArray(writer.agreed_cost, row.currency, row.agreed_cost); writerMap.set(row.worker_id, writer); }
+  for (const row of rangedWorkers) { const writer = writerMap.get(row.worker_id) ?? { writer_id: row.worker_id, name: names.get(row.worker_id) ?? "Unavailable writer", assigned_tasks: 0, completed_tasks: 0, agreed_cost: [], amount_paid: [], amount_payable: [] }; const assignmentStatus = allAssignments.find((assignment) => assignment.id === row.assignment_id)?.status; writer.assigned_tasks += 1; if (isCompletedWriterAllocation(row.status, assignmentStatus)) writer.completed_tasks += 1; writer.agreed_cost = addToArray(writer.agreed_cost, row.currency, row.agreed_cost); writerMap.set(row.worker_id, writer); }
   for (const writer of writerMap.values()) { const payments = payableWorkerPayments.filter((row) => row.worker_id === writer.writer_id); writer.amount_paid = groupCurrencyAmounts(payments, (row) => row.currency, (row) => row.amount); writer.amount_payable = subtractCurrencyAmounts(writer.agreed_cost, writer.amount_paid); }
 
   const modeMap = new Map<WorkMode, WorkModePerformance>();

@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import type { AssignmentStatus } from "@/types/assignment";
-import type { AssignmentWorkerStatus } from "@/types/assignment-worker";
+import {
+  isActiveWriterAllocation,
+  isCompletedWriterAllocation,
+  normalizeAssignmentStatus,
+  normalizeAssignmentWorkerStatus,
+} from "@/lib/utils/status";
 import type { ContactRole } from "@/types/contact";
 import type {
   MoneyAmount,
@@ -32,7 +36,7 @@ type AllocationRow = {
   worker_deadline: string | null;
   agreed_cost: number | string;
   currency: string;
-  status: AssignmentWorkerStatus;
+  status: string;
   delivered_at: string | null;
   updated_at: string;
 };
@@ -51,7 +55,7 @@ type AssignmentRow = {
   id: string;
   task_code: string;
   title: string;
-  status: AssignmentStatus;
+  status: string;
 };
 type AccountRow = { id: string; account_name: string };
 
@@ -61,16 +65,6 @@ const allocationColumns =
   "id, assignment_id, worker_id, work_description, assigned_date, worker_deadline, agreed_cost, currency, status, delivered_at, updated_at";
 const paymentColumns =
   "id, assignment_worker_id, worker_id, payment_date, amount, currency, payment_method, transaction_reference, payment_account_id";
-const activeStatuses = new Set<AssignmentWorkerStatus>([
-  "assigned",
-  "in_progress",
-  "revision",
-]);
-const completedStatuses = new Set<AssignmentWorkerStatus>([
-  "delivered",
-  "completed",
-]);
-
 function numberValue(value: number | string) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -99,7 +93,8 @@ function rolesByContact(rows: RoleRow[]) {
 function metricsForWriter(
   writerId: string,
   allocations: AllocationRow[],
-  payments: PaymentRow[]
+  payments: PaymentRow[],
+  assignments: Map<string, AssignmentRow>
 ): WriterMetrics {
   const writerAllocations = allocations.filter((row) => row.worker_id === writerId);
   const writerPayments = payments.filter((row) => row.worker_id === writerId);
@@ -120,14 +115,23 @@ function metricsForWriter(
   }
 
   const openDeadlines = writerAllocations
-    .filter((row) => activeStatuses.has(row.status) && row.worker_deadline)
+    .filter((row) =>
+      isActiveWriterAllocation(row.status, assignments.get(row.assignment_id)?.status)
+    )
+    .filter((row) => row.worker_deadline)
     .map((row) => row.worker_deadline as string)
     .sort();
 
   return {
-    active_assignments: writerAllocations.filter((row) => activeStatuses.has(row.status)).length,
-    total_assignments: writerAllocations.length,
-    completed_assignments: writerAllocations.filter((row) => completedStatuses.has(row.status)).length,
+    active_assignments: writerAllocations.filter((row) =>
+      isActiveWriterAllocation(row.status, assignments.get(row.assignment_id)?.status)
+    ).length,
+    total_assignments: writerAllocations.filter(
+      (row) => normalizeAssignmentWorkerStatus(row.status) !== "cancelled"
+    ).length,
+    completed_assignments: writerAllocations.filter((row) =>
+      isCompletedWriterAllocation(row.status, assignments.get(row.assignment_id)?.status)
+    ).length,
     total_agreed_cost: moneyAmounts(agreed),
     total_paid: moneyAmounts(paid),
     total_payable: moneyAmounts(payable),
@@ -144,13 +148,14 @@ function databaseError(context: string, error: { code?: string; message: string 
 
 export async function getWriters(ownerId: string, filters: WriterFilters = {}) {
   const supabase = await createClient();
-  const [contactsResult, rolesResult, allocationsResult, paymentsResult] = await Promise.all([
+  const [contactsResult, rolesResult, allocationsResult, paymentsResult, assignmentsResult] = await Promise.all([
     supabase.from("contacts").select(contactColumns).eq("owner_id", ownerId).order("name"),
     supabase.from("contact_roles").select("contact_id, role").eq("owner_id", ownerId),
     supabase.from("assignment_workers").select(allocationColumns).eq("owner_id", ownerId),
     supabase.from("worker_payments").select(paymentColumns).eq("owner_id", ownerId),
+    supabase.from("assignments").select("id, task_code, title, status").eq("owner_id", ownerId),
   ]);
-  const failed = [contactsResult, rolesResult, allocationsResult, paymentsResult].find((result) => result.error);
+  const failed = [contactsResult, rolesResult, allocationsResult, paymentsResult, assignmentsResult].find((result) => result.error);
   if (failed?.error) {
     databaseError("writers", failed.error);
     return { data: [] as WriterListItem[], error: "We could not load writers. Please refresh and try again." };
@@ -160,6 +165,9 @@ export async function getWriters(ownerId: string, filters: WriterFilters = {}) {
   const roles = rolesByContact((rolesResult.data ?? []) as RoleRow[]);
   const allocations = (allocationsResult.data ?? []) as AllocationRow[];
   const payments = (paymentsResult.data ?? []) as PaymentRow[];
+  const assignments = new Map(
+    ((assignmentsResult.data ?? []) as AssignmentRow[]).map((row) => [row.id, row])
+  );
   let writers = contacts
     .filter((contact) => {
       const contactRoles = roles.get(contact.id) ?? [];
@@ -171,7 +179,7 @@ export async function getWriters(ownerId: string, filters: WriterFilters = {}) {
       company_name: contact.company_name,
       roles: roles.get(contact.id) ?? [],
       is_active: contact.is_active,
-      ...metricsForWriter(contact.id, allocations, payments),
+      ...metricsForWriter(contact.id, allocations, payments, assignments),
     }));
 
   const search = filters.search?.toLocaleLowerCase();
@@ -219,11 +227,13 @@ export async function getWriterDetail(ownerId: string, writerId: string): Promis
       worker_deadline: row.worker_deadline,
       agreed_cost: numberValue(row.agreed_cost),
       currency: row.currency,
-      status: row.status,
+      status: normalizeAssignmentWorkerStatus(row.status),
       delivered_at: row.delivered_at,
       task_code: assignment?.task_code ?? null,
       assignment_title: assignment?.title ?? null,
-      assignment_status: assignment?.status ?? null,
+      assignment_status: assignment
+        ? normalizeAssignmentStatus(assignment.status)
+        : null,
     };
   });
   const allocationById = new Map(allocationDetails.map((row) => [row.id, row]));
@@ -256,10 +266,16 @@ export async function getWriterDetail(ownerId: string, writerId: string): Promis
       preferred_currency: contact.preferred_currency,
       roles,
       is_active: contact.is_active,
-      ...metricsForWriter(writerId, allocations, payments),
-      active_allocations: allocationDetails.filter((row) => activeStatuses.has(row.status)).sort(byDeadline),
-      completed_allocations: allocationDetails.filter((row) => completedStatuses.has(row.status)).sort((a, b) => (b.delivered_at ?? b.assigned_date).localeCompare(a.delivered_at ?? a.assigned_date)),
-      other_allocations: allocationDetails.filter((row) => row.status === "cancelled"),
+      ...metricsForWriter(writerId, allocations, payments, assignments),
+      active_allocations: allocationDetails.filter((row) =>
+        isActiveWriterAllocation(row.status, row.assignment_status)
+      ).sort(byDeadline),
+      completed_allocations: allocationDetails.filter((row) =>
+        isCompletedWriterAllocation(row.status, row.assignment_status)
+      ).sort((a, b) => (b.delivered_at ?? b.assigned_date).localeCompare(a.delivered_at ?? a.assigned_date)),
+      other_allocations: allocationDetails.filter((row) =>
+        row.status === "cancelled" || row.assignment_status === "cancelled"
+      ),
       payments: paymentHistory,
     },
   };

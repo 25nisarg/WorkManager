@@ -22,15 +22,15 @@ function PaymentTable({ rows }: { rows: WriterPaymentHistory[] }) {
 export function WriterDetails({ writer }: { writer: WriterDetail }) {
   const metrics = [
     { label: "Total assigned", value: String(writer.total_assignments), detail: "All allocation records" },
-    { label: "Active tasks", value: String(writer.active_assignments), detail: "Assigned, in progress, or revision" },
-    { label: "Completed work", value: String(writer.completed_assignments), detail: "Delivered or completed" },
+    { label: "Active tasks", value: String(writer.active_assignments), detail: "Open allocations on new assignments" },
+    { label: "Completed work", value: String(writer.completed_assignments), detail: "Writer or assignment delivered" },
   ];
   return <div className="space-y-6">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{metrics.map((metric) => <Card key={metric.label} className="p-5"><p className="text-sm font-medium text-slate-500">{metric.label}</p><p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p><p className="mt-2 text-xs text-slate-500">{metric.detail}</p></Card>)}</div>
     <div className="grid gap-4 sm:grid-cols-3"><Card className="p-5"><p className="text-sm font-medium text-slate-500">Total agreed cost</p><div className="mt-3 text-lg font-semibold"><WriterMoney values={writer.total_agreed_cost} /></div><p className="mt-2 text-xs text-slate-500">Non-cancelled allocations</p></Card><Card className="p-5"><p className="text-sm font-medium text-slate-500">Total paid</p><div className="mt-3 text-lg font-semibold"><WriterMoney values={writer.total_paid} /></div><p className="mt-2 text-xs text-slate-500">Recorded writer payments</p></Card><Card className="p-5"><p className="text-sm font-medium text-slate-500">Total payable</p><div className="mt-3 text-lg"><WriterMoney values={writer.total_payable} emphasize /></div><p className="mt-2 text-xs text-slate-500">Agreed cost minus paid, by currency</p></Card></div>
     <Card className="overflow-hidden"><div className="border-b border-slate-100 px-5 py-4"><h2 className="font-semibold text-slate-900">Writer profile</h2></div><div className="grid divide-y divide-slate-100 px-5 md:grid-cols-3 md:divide-x md:divide-y-0"><div className="md:pr-5"><ProfileRow icon={CircleUserRound} label="Name" value={writer.name} /><ProfileRow icon={Building2} label="Company" value={writer.company_name} /></div><div className="md:px-5"><ProfileRow icon={Mail} label="Email" value={writer.email} href={writer.email ? `mailto:${writer.email}` : undefined} /><ProfileRow icon={Phone} label="Phone" value={writer.phone} href={writer.phone ? `tel:${writer.phone}` : undefined} /></div><div className="md:pl-5"><ProfileRow icon={MessageCircle} label="WhatsApp" value={writer.whatsapp} href={writer.whatsapp ? `https://wa.me/${writer.whatsapp.replace(/\D/g, "")}` : undefined} /><ProfileRow icon={Coins} label="Preferred currency" value={writer.preferred_currency} /></div></div></Card>
-    <WorkTable title="Active assignments" description="Current work that is assigned, in progress, or in revision." rows={writer.active_allocations} />
-    <WorkTable title="Completed work" description="Allocations marked delivered or completed." rows={writer.completed_allocations} />
+    <WorkTable title="Active assignments" description="Open writer allocations on new assignments." rows={writer.active_allocations} />
+    <WorkTable title="Completed work" description="Work delivered by the writer or completed through assignment delivery." rows={writer.completed_allocations} />
     {writer.other_allocations.length > 0 && <WorkTable title="Cancelled allocations" description="Historical allocations that were cancelled." rows={writer.other_allocations} />}
     <PaymentTable rows={writer.payments} />
   </div>;

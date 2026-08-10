@@ -388,7 +388,7 @@ quoted as (
   group by owner_id
 ), assignment_rollup as (
   select owner_id, count(*) as total_assignments,
-    count(*) filter (where status in ('new','assigned','in_progress','writer_delivered','under_review','ready_to_deliver','revision')) as active_assignments,
+    count(*) filter (where status = 'new') as active_assignments,
     sum(actual_inr_received) as actual_inr_received,
     sum(writer_agreed_cost_inr) as writer_agreed_cost_inr,
     sum(writer_paid_inr) as writer_paid_inr,

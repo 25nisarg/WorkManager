@@ -1,13 +1,6 @@
 export const ASSIGNMENT_STATUSES = [
   { value: "new", label: "New" },
-  { value: "assigned", label: "Assigned" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "writer_delivered", label: "Writer Delivered" },
-  { value: "under_review", label: "Under Review" },
-  { value: "ready_to_deliver", label: "Ready to Deliver" },
   { value: "delivered", label: "Delivered" },
-  { value: "revision", label: "Revision" },
-  { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
 ] as const;
 

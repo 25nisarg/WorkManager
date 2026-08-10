@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import type { AssignmentPriority, AssignmentStatus, WorkMode } from "@/types/assignment";
-import type { AssignmentWorkerStatus } from "@/types/assignment-worker";
+import type { AssignmentPriority, WorkMode } from "@/types/assignment";
 import type { DeadlineFilters, DeadlineItem, DeadlinesData, DeadlineUrgency } from "@/types/deadline";
+import {
+  isActiveAssignmentStatus,
+  normalizeAssignmentStatus,
+  normalizeAssignmentWorkerStatus,
+} from "@/lib/utils/status";
 
 type AssignmentRow = {
   id: string;
@@ -9,7 +13,7 @@ type AssignmentRow = {
   task_code: string;
   title: string;
   client_deadline: string | null;
-  status: AssignmentStatus;
+  status: string;
   priority: AssignmentPriority;
   work_mode: WorkMode;
 };
@@ -18,7 +22,7 @@ type WorkerRow = {
   assignment_id: string;
   worker_id: string;
   worker_deadline: string | null;
-  status: AssignmentWorkerStatus;
+  status: string;
 };
 type ContactRow = { id: string; name: string };
 
@@ -68,24 +72,22 @@ export async function getDeadlines(ownerId: string, filters: DeadlineFilters = {
   const writerIds = new Set(workers.map((worker) => worker.worker_id));
   const writerOptions = contacts.filter((contact) => writerIds.has(contact.id)).map((contact) => ({ id: contact.id, name: contact.name })).sort((a, b) => a.name.localeCompare(b.name));
   const now = new Date();
-  const closedAssignments = new Set<AssignmentStatus>(["delivered", "completed", "cancelled"]);
-  const closedWorkers = new Set<AssignmentWorkerStatus>(["delivered", "completed", "cancelled"]);
   const items: DeadlineItem[] = [];
 
   for (const assignment of assignments) {
-    if (assignment.client_deadline && !closedAssignments.has(assignment.status)) {
+    if (assignment.client_deadline && isActiveAssignmentStatus(assignment.status)) {
       const assignmentWorkers = workersByAssignment.get(assignment.id) ?? [];
       if (!filters.writerId || assignmentWorkers.some((worker) => worker.worker_id === filters.writerId)) {
         const writerNames = assignmentWorkers.map((worker) => names.get(worker.worker_id)).filter((name): name is string => Boolean(name));
-        items.push({ id: `client-${assignment.id}`, kind: "client", assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.received_from_id ? names.get(assignment.received_from_id) ?? null : null, deadline: assignment.client_deadline, urgency: urgency(assignment.client_deadline, now), assignment_status: assignment.status, priority: assignment.priority, work_mode: assignment.work_mode, writer: writerNames.length ? { id: assignmentWorkers[0]?.worker_id ?? "", name: writerNames.length === 1 ? writerNames[0] : `${writerNames.length} writers` } : null, writer_status: null });
+        items.push({ id: `client-${assignment.id}`, kind: "client", assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.received_from_id ? names.get(assignment.received_from_id) ?? null : null, deadline: assignment.client_deadline, urgency: urgency(assignment.client_deadline, now), assignment_status: normalizeAssignmentStatus(assignment.status), priority: assignment.priority, work_mode: assignment.work_mode, writer: writerNames.length ? { id: assignmentWorkers[0]?.worker_id ?? "", name: writerNames.length === 1 ? writerNames[0] : `${writerNames.length} writers` } : null, writer_status: null });
       }
     }
   }
   for (const worker of workers) {
     const assignment = assignmentsById.get(worker.assignment_id);
-    if (!assignment || !worker.worker_deadline || closedAssignments.has(assignment.status) || closedWorkers.has(worker.status)) continue;
+    if (!assignment || !worker.worker_deadline || !isActiveAssignmentStatus(assignment.status) || normalizeAssignmentWorkerStatus(worker.status) !== "assigned") continue;
     if (filters.writerId && worker.worker_id !== filters.writerId) continue;
-    items.push({ id: `writer-${worker.id}`, kind: "writer", assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.received_from_id ? names.get(assignment.received_from_id) ?? null : null, deadline: worker.worker_deadline, urgency: urgency(worker.worker_deadline, now), assignment_status: assignment.status, priority: assignment.priority, work_mode: assignment.work_mode, writer: { id: worker.worker_id, name: names.get(worker.worker_id) ?? "Unavailable writer" }, writer_status: worker.status });
+    items.push({ id: `writer-${worker.id}`, kind: "writer", assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.received_from_id ? names.get(assignment.received_from_id) ?? null : null, deadline: worker.worker_deadline, urgency: urgency(worker.worker_deadline, now), assignment_status: normalizeAssignmentStatus(assignment.status), priority: assignment.priority, work_mode: assignment.work_mode, writer: { id: worker.worker_id, name: names.get(worker.worker_id) ?? "Unavailable writer" }, writer_status: normalizeAssignmentWorkerStatus(worker.status) });
   }
 
   let filtered = items;
