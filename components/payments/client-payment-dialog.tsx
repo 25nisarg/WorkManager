@@ -23,6 +23,7 @@ type ClientPaymentDialogProps = {
   initialValues?: ClientPaymentFormValues;
   defaultAssignmentId?: string;
   defaultPayerId?: string;
+  lockAssignmentContext?: boolean;
 };
 
 const fieldClass =
@@ -46,17 +47,18 @@ export function ClientPaymentDialog({
   initialValues,
   defaultAssignmentId,
   defaultPayerId,
+  lockAssignmentContext = false,
 }: ClientPaymentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editing = Boolean(paymentId);
   const action = paymentId
     ? updateClientPayment.bind(null, paymentId)
-    : createClientPayment;
+    : createClientPayment.bind(null, lockAssignmentContext ? defaultAssignmentId ?? null : null);
   const [state, formAction, pending] = useActionState(action, {});
   const submitted = state.values;
   const currency = asText(
     submitted?.currency_original,
-    initialValues?.currency_original ?? "INR"
+    initialValues?.currency_original ?? (lockAssignmentContext ? assignments[0]?.currency : undefined) ?? "INR"
   );
   const currencies = COMMON_CURRENCIES.includes(
     currency as (typeof COMMON_CURRENCIES)[number]
@@ -81,7 +83,13 @@ export function ClientPaymentDialog({
           </div>
           <div className="grid gap-5 p-5 sm:grid-cols-2">
             {state.error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{state.error}</div>}
-            <div className="space-y-2 sm:col-span-2">
+            {lockAssignmentContext && !editing ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Assignment and payer</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{assignments[0]?.task_code} — {assignments[0]?.title}</p>
+                <p className="mt-1 text-xs text-slate-500">Payer is securely inferred from the assignment client/source.</p>
+              </div>
+            ) : <><div className="space-y-2 sm:col-span-2">
               <label htmlFor={"client-payment-assignment-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Assignment *</label>
               <select id={"client-payment-assignment-" + (paymentId ?? "new")} name="assignment_id" defaultValue={asText(submitted?.assignment_id, initialValues?.assignment_id ?? defaultAssignmentId)} aria-invalid={Boolean(state.fieldErrors?.assignment_id)} className={fieldClass}>
                 <option value="" disabled>Select an assignment</option>
@@ -96,7 +104,7 @@ export function ClientPaymentDialog({
                 {payers.map((payer) => <option key={payer.id} value={payer.id}>{payer.name}{payer.company_name ? " — " + payer.company_name : ""}</option>)}
               </select>
               {state.fieldErrors?.payer_id && <p className="text-xs text-red-600">{state.fieldErrors.payer_id[0]}</p>}
-            </div>
+            </div></>}
             <div className="space-y-2">
               <label htmlFor={"client-payment-date-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Payment date *</label>
               <input id={"client-payment-date-" + (paymentId ?? "new")} name="payment_date" type="date" defaultValue={asText(submitted?.payment_date, initialValues?.payment_date ?? todayInputValue())} className={fieldClass} />

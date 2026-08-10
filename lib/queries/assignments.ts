@@ -3,7 +3,6 @@ import type {
   Assignment,
   AssignmentContact,
   DeadlineState,
-  AssignmentFinancialSummary,
   AssignmentPriority,
   AssignmentStatus,
   WorkMode,
@@ -27,9 +26,7 @@ export type AssignmentQueryResult<T> = {
 
 export type AssignmentDetailResult = {
   assignment: Assignment | null;
-  financialSummary: AssignmentFinancialSummary | null;
   error?: string;
-  financialError?: string;
 };
 
 const assignmentColumns =
@@ -187,44 +184,26 @@ export async function getAssignment(
   if (error) {
     return {
       assignment: null,
-      financialSummary: null,
       error: "We could not load this assignment. Please try again.",
     };
   }
 
   if (!assignmentRow) {
-    return { assignment: null, financialSummary: null };
+    return { assignment: null };
   }
 
-  const [contactResult, financialResult] = await Promise.all([
-    supabase
-      .from("contacts")
-      .select(contactColumns)
-      .eq("owner_id", ownerId)
-      .eq("id", assignmentRow.received_from_id)
-      .maybeSingle(),
-    supabase
-      .from("assignment_financial_summary")
-      .select("*")
-      .eq("owner_id", ownerId)
-      .eq("assignment_id", assignmentId)
-      .maybeSingle(),
-  ]);
+  const contactResult = await supabase
+    .from("contacts")
+    .select(contactColumns)
+    .eq("owner_id", ownerId)
+    .eq("id", assignmentRow.received_from_id)
+    .maybeSingle();
 
   if (contactResult.error) {
     return {
       assignment: null,
-      financialSummary: null,
       error: "We could not load the assignment contact. Please try again.",
     };
-  }
-
-  if (financialResult.error) {
-    console.error("[assignment financial summary query failed]", {
-      assignmentId,
-      errorCode: financialResult.error.code,
-      errorMessage: financialResult.error.message,
-    });
   }
 
   const [assignment] = attachContacts(
@@ -234,12 +213,5 @@ export async function getAssignment(
       : []
   );
 
-  return {
-    assignment,
-    financialSummary:
-      (financialResult.data as AssignmentFinancialSummary | null) ?? null,
-    financialError: financialResult.error
-      ? "Financial summary data is temporarily unavailable."
-      : undefined,
-  };
+  return { assignment };
 }

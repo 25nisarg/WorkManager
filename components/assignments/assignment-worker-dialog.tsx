@@ -7,7 +7,6 @@ import {
   updateAssignmentWorker,
 } from "@/lib/actions/assignment-workers";
 import { ASSIGNMENT_WORKER_STATUSES } from "@/lib/constants/assignment-workers";
-import { COMMON_CURRENCIES } from "@/lib/constants/contacts";
 import type {
   AssignmentWorkerActionState,
   AssignmentWorkerFormValues,
@@ -20,7 +19,6 @@ type AssignmentWorkerDialogProps = {
   writers: EligibleWriter[];
   assignedWriterIds: string[];
   initialValues?: AssignmentWorkerFormValues;
-  assignmentCurrency: string;
   subdued?: boolean;
 };
 
@@ -29,12 +27,6 @@ const fieldClass =
 
 function asText(value: string | undefined, fallback = "") {
   return typeof value === "string" ? value : fallback;
-}
-
-function todayInputValue() {
-  const date = new Date();
-  const localTime = date.getTime() - date.getTimezoneOffset() * 60 * 1000;
-  return new Date(localTime).toISOString().slice(0, 10);
 }
 
 function toLocalDateTime(value?: string | null) {
@@ -53,7 +45,6 @@ export function AssignmentWorkerDialog({
   writers,
   assignedWriterIds,
   initialValues,
-  assignmentCurrency,
   subdued = false,
 }: AssignmentWorkerDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -78,15 +69,9 @@ export function AssignmentWorkerDialog({
     (writer) =>
       writer.id === selectedWriterId || !assignedWriterIds.includes(writer.id)
   );
-  const currentCurrency = asText(
-    submitted?.currency,
-    initialValues?.currency ?? assignmentCurrency
-  );
-  const currencies = COMMON_CURRENCIES.includes(
-    currentCurrency as (typeof COMMON_CURRENCIES)[number]
-  )
-    ? COMMON_CURRENCIES
-    : [currentCurrency, ...COMMON_CURRENCIES];
+  const assignedDate = asText(submitted?.assigned_date, initialValues?.assigned_date ?? new Date().toISOString().slice(0, 10));
+  const allocationCurrency = asText(submitted?.currency, initialValues?.currency ?? "INR");
+  const deliveredAt = asText(submitted?.delivered_at, initialValues?.delivered_at ?? "");
 
   return (
     <>
@@ -112,6 +97,9 @@ export function AssignmentWorkerDialog({
         aria-labelledby={(editing ? "edit" : "add") + "-writer-title"}
       >
         <form action={formAction}>
+          <input type="hidden" name="assigned_date" value={assignedDate} />
+          <input type="hidden" name="currency" value={allocationCurrency} />
+          <input type="hidden" name="delivered_at" value={toLocalDateTime(deliveredAt)} />
           <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4">
             <div>
               <h2 id={(editing ? "edit" : "add") + "-writer-title"} className="font-semibold text-slate-900">
@@ -161,11 +149,6 @@ export function AssignmentWorkerDialog({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor={"assigned_date-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Assigned date *</label>
-              <input id={"assigned_date-" + (allocationId ?? "new")} name="assigned_date" type="date" defaultValue={asText(submitted?.assigned_date, initialValues?.assigned_date ?? todayInputValue())} aria-invalid={Boolean(state.fieldErrors?.assigned_date)} className={fieldClass} />
-              {state.fieldErrors?.assigned_date && <p className="text-xs text-red-600">{state.fieldErrors.assigned_date[0]}</p>}
-            </div>
-            <div className="space-y-2">
               <label htmlFor={"worker_deadline-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Writer deadline *</label>
               <input id={"worker_deadline-" + (allocationId ?? "new")} name="worker_deadline" type="datetime-local" defaultValue={toLocalDateTime(asText(submitted?.worker_deadline, initialValues?.worker_deadline))} aria-invalid={Boolean(state.fieldErrors?.worker_deadline)} className={fieldClass} />
               {state.fieldErrors?.worker_deadline && <p className="text-xs text-red-600">{state.fieldErrors.worker_deadline[0]}</p>}
@@ -177,23 +160,12 @@ export function AssignmentWorkerDialog({
               {state.fieldErrors?.agreed_cost && <p className="text-xs text-red-600">{state.fieldErrors.agreed_cost[0]}</p>}
             </div>
             <div className="space-y-2">
-              <label htmlFor={"worker-currency-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Currency</label>
-              <select id={"worker-currency-" + (allocationId ?? "new")} name="currency" defaultValue={currentCurrency} className={fieldClass}>
-                {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-2">
               <label htmlFor={"worker-status-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Status</label>
               <select id={"worker-status-" + (allocationId ?? "new")} name="status" defaultValue={asText(submitted?.status, initialValues?.status ?? "assigned")} className={fieldClass}>
                 {ASSIGNMENT_WORKER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
               </select>
             </div>
-            <div className="space-y-2">
-              <label htmlFor={"delivered_at-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Delivered at</label>
-              <input id={"delivered_at-" + (allocationId ?? "new")} name="delivered_at" type="datetime-local" defaultValue={toLocalDateTime(asText(submitted?.delivered_at, initialValues?.delivered_at ?? ""))} aria-invalid={Boolean(state.fieldErrors?.delivered_at)} className={fieldClass} />
-              {state.fieldErrors?.delivered_at && <p className="text-xs text-red-600">{state.fieldErrors.delivered_at[0]}</p>}
-            </div>
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">{editing && allocationCurrency !== "INR" ? `This existing allocation remains in ${allocationCurrency}.` : "Agreed costs are recorded in INR for the current workflow."}</div>
 
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor={"worker-notes-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Notes</label>

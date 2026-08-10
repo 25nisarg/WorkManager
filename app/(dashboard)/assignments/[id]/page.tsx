@@ -11,6 +11,7 @@ import { AssignmentDetails } from "@/components/assignments/assignment-details";
 import { AssignmentWriterSection } from "@/components/assignments/assignment-writer-section";
 import { AssignmentPaymentsSection } from "@/components/payments/assignment-payments-section";
 import { AssignmentExpensesSection } from "@/components/expenses/assignment-expenses-section";
+import { AssignmentFilesPlaceholder } from "@/components/assignments/assignment-files-placeholder";
 import { DeleteAssignmentDialog } from "@/components/assignments/delete-assignment-dialog";
 import { DataError } from "@/components/ui/data-error";
 import { getAssignment } from "@/lib/queries/assignments";
@@ -70,7 +71,6 @@ export default async function AssignmentDetailPage({
             assignment={result.assignment}
             allocations={workerResult.data.allocations}
             eligibleWriters={workerResult.data.eligibleWriters}
-            financialSummary={result.financialSummary}
             error={workerResult.error}
           />
           <AssignmentPaymentsSection
@@ -84,9 +84,11 @@ export default async function AssignmentDetailPage({
           />
           <AssignmentDetails
             assignment={result.assignment}
-            financialSummary={result.financialSummary}
-            financialError={result.financialError}
+            allocations={workerResult.data.allocations}
+            payments={paymentResult}
+            expenses={expenseResult}
           />
+          <AssignmentFilesPlaceholder />
         </>
       )}
     </div>

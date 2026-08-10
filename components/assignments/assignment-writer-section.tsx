@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   CalendarClock,
-  CircleCheck,
   HandCoins,
   UserRoundCog,
   UsersRound,
@@ -11,9 +10,10 @@ import { DataError } from "@/components/ui/data-error";
 import { AssignmentWorkerDialog } from "./assignment-worker-dialog";
 import { AssignmentWorkerStatusBadge } from "./assignment-worker-status-badge";
 import { DeleteAssignmentWorkerDialog } from "./delete-assignment-worker-dialog";
-import { getFinancialSummaryNumber } from "@/lib/utils/financial-summary";
+import { CurrencyValues } from "@/components/ui/currency-values";
+import { groupCurrencyAmounts } from "@/lib/utils/currency";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils/format";
-import type { Assignment, AssignmentFinancialSummary } from "@/types/assignment";
+import type { Assignment } from "@/types/assignment";
 import type {
   AssignmentWorker,
   EligibleWriter,
@@ -23,7 +23,6 @@ type AssignmentWriterSectionProps = {
   assignment: Assignment;
   allocations: AssignmentWorker[];
   eligibleWriters: EligibleWriter[];
-  financialSummary: AssignmentFinancialSummary | null;
   error?: string;
 };
 
@@ -31,26 +30,11 @@ export function AssignmentWriterSection({
   assignment,
   allocations,
   eligibleWriters,
-  financialSummary,
   error,
 }: AssignmentWriterSectionProps) {
   const assignedWriterIds = allocations.map((allocation) => allocation.worker_id);
-  const viewWriterCost = getFinancialSummaryNumber(financialSummary, [
-    "worker_cost",
-    "writer_cost",
-    "total_writer_cost",
-  ]);
-  const sameCurrency = allocations.every(
-    (allocation) => allocation.currency === assignment.currency
-  );
-  const directWriterCost = sameCurrency
-    ? allocations.reduce((total, allocation) => total + allocation.agreed_cost, 0)
-    : null;
-  const writerCost = viewWriterCost ?? directWriterCost;
-  const expectedGrossProfit = getFinancialSummaryNumber(financialSummary, [
-    "expected_gross_profit",
-    "gross_profit",
-  ]);
+  const costAllocations = allocations.filter((allocation) => allocation.status !== "cancelled");
+  const writerCosts = groupCurrencyAmounts(costAllocations, (allocation) => allocation.currency, (allocation) => allocation.agreed_cost);
   const availableWriterCount = eligibleWriters.filter(
     (writer) => !assignedWriterIds.includes(writer.id)
   ).length;
@@ -74,7 +58,6 @@ export function AssignmentWriterSection({
           assignmentId={assignment.id}
           writers={eligibleWriters}
           assignedWriterIds={assignedWriterIds}
-          assignmentCurrency={assignment.currency}
           subdued={assignment.work_mode === "self"}
         />
       </div>
@@ -82,9 +65,9 @@ export function AssignmentWriterSection({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Number of writers", value: String(allocations.length), icon: UsersRound },
-          { label: "Total agreed writer cost", value: writerCost === null ? "Not available" : formatCurrency(writerCost, assignment.currency), icon: HandCoins },
+          { label: "Total agreed writer cost", value: <CurrencyValues values={writerCosts} />, icon: HandCoins },
           { label: "Selling price", value: formatCurrency(assignment.selling_price, assignment.currency), icon: UserRoundCog },
-          { label: "Expected gross profit", value: expectedGrossProfit === null ? "Not available" : formatCurrency(expectedGrossProfit, assignment.currency), icon: CircleCheck },
+          { label: "Work mode", value: assignment.work_mode === "self" ? "Self" : assignment.work_mode === "outsourced" ? "Outsourced" : "Mixed", icon: UserRoundCog },
         ].map((item) => (
           <Card key={item.label} className="flex items-start justify-between gap-3 p-4">
             <div>
@@ -162,7 +145,6 @@ export function AssignmentWriterSection({
                   writers={eligibleWriters}
                   assignedWriterIds={assignedWriterIds}
                   initialValues={allocation}
-                  assignmentCurrency={assignment.currency}
                 />
                 <DeleteAssignmentWorkerDialog
                   assignmentId={assignment.id}

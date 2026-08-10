@@ -163,10 +163,17 @@ function redirectAfterExpense(
 }
 
 export async function createExpense(
+  assignmentContextId: string | null,
   _previousState: ExpenseActionState,
   formData: FormData
 ): Promise<ExpenseActionState> {
   const values = expenseFormValues(formData);
+  if (assignmentContextId) {
+    const contextId = expenseIdSchema.safeParse(assignmentContextId);
+    if (!contextId.success) return { error: "This assignment link is invalid.", values };
+    values.assignment_id = contextId.data;
+    values.return_to_assignment = contextId.data;
+  }
   const parsed = expenseSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
@@ -220,12 +227,19 @@ export async function createExpense(
 
 export async function updateExpense(
   expenseId: string,
+  assignmentContextId: string | null,
   _previousState: ExpenseActionState,
   formData: FormData
 ): Promise<ExpenseActionState> {
   const idResult = expenseIdSchema.safeParse(expenseId);
   if (!idResult.success) return { error: "This expense link is invalid." };
   const values = expenseFormValues(formData);
+  if (assignmentContextId) {
+    const contextId = expenseIdSchema.safeParse(assignmentContextId);
+    if (!contextId.success) return { error: "This assignment link is invalid.", values };
+    values.assignment_id = contextId.data;
+    values.return_to_assignment = contextId.data;
+  }
   const parsed = expenseSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
@@ -348,7 +362,7 @@ export async function createPaymentAccount(
   revalidatePath("/settings");
   revalidatePath("/payments");
   revalidatePath("/expenses");
-  redirect("/settings");
+  redirect("/settings?section=accounts");
 }
 
 export async function updatePaymentAccount(
@@ -390,7 +404,7 @@ export async function updatePaymentAccount(
   revalidatePath("/settings");
   revalidatePath("/payments");
   revalidatePath("/expenses");
-  redirect("/settings");
+  redirect("/settings?section=accounts");
 }
 
 export async function deletePaymentAccount(
@@ -456,5 +470,5 @@ export async function deletePaymentAccount(
   revalidatePath("/settings");
   revalidatePath("/payments");
   revalidatePath("/expenses");
-  redirect("/settings");
+  redirect("/settings?section=accounts");
 }

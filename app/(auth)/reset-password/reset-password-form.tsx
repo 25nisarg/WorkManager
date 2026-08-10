@@ -1,0 +1,12 @@
+"use client";
+
+import { useActionState } from "react";
+import { LoaderCircle, LockKeyhole } from "lucide-react";
+import { resetPassword } from "./actions";
+
+const fieldClass = "h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-950 caret-indigo-600 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 aria-[invalid=true]:border-red-400";
+
+export function ResetPasswordForm() {
+  const [state, formAction, pending] = useActionState(resetPassword, {});
+  return <form action={formAction} className="space-y-5">{state.error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">{state.error}</div>}<div className="space-y-2"><label htmlFor="new_password" className="block text-sm font-medium text-slate-700">New password</label><div className="relative"><LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input id="new_password" name="new_password" type="password" autoComplete="new-password" required aria-invalid={Boolean(state.fieldErrors?.new_password)} className={fieldClass} /></div>{state.fieldErrors?.new_password?.[0] && <p className="text-xs text-red-600">{state.fieldErrors.new_password[0]}</p>}</div><div className="space-y-2"><label htmlFor="confirm_password" className="block text-sm font-medium text-slate-700">Confirm new password</label><div className="relative"><LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input id="confirm_password" name="confirm_password" type="password" autoComplete="new-password" required aria-invalid={Boolean(state.fieldErrors?.confirm_password)} className={fieldClass} /></div>{state.fieldErrors?.confirm_password?.[0] && <p className="text-xs text-red-600">{state.fieldErrors.confirm_password[0]}</p>}</div><p className="text-xs leading-5 text-slate-500">Use at least 10 characters with uppercase, lowercase, and a number.</p><button type="submit" disabled={pending} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60">{pending && <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />}{pending ? "Updating…" : "Set new password"}</button></form>;
+}

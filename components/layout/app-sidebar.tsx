@@ -22,16 +22,15 @@ type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
-  available?: boolean;
 };
 
 const navigation: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: CircleGauge, available: true },
-  { label: "Assignments", href: "/assignments", icon: BriefcaseBusiness, available: true },
-  { label: "Contacts", href: "/contacts", icon: ContactRound, available: true },
+  { label: "Dashboard", href: "/dashboard", icon: CircleGauge },
+  { label: "Assignments", href: "/assignments", icon: BriefcaseBusiness },
+  { label: "Contacts", href: "/contacts", icon: ContactRound },
   { label: "Writers", href: "/writers", icon: UsersRound },
-  { label: "Payments", href: "/payments", icon: Banknote, available: true },
-  { label: "Expenses", href: "/expenses", icon: ReceiptText, available: true },
+  { label: "Payments", href: "/payments", icon: Banknote },
+  { label: "Expenses", href: "/expenses", icon: ReceiptText },
   { label: "Deadlines", href: "/deadlines", icon: CalendarClock },
   { label: "Reports", href: "/reports", icon: ChartNoAxesCombined },
 ];
@@ -85,29 +84,10 @@ export function AppSidebar({ collapsed, mobileOpen, onCloseMobile, onToggleColla
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const active = item.available && (pathname === item.href || pathname.startsWith(item.href + "/"));
+            const active = pathname === item.href || pathname.startsWith(item.href + "/");
             const sharedClass =
               "group flex h-10 w-full items-center rounded-lg text-sm font-medium transition " +
               (collapsed ? "justify-center px-2" : "gap-3 px-3");
-
-            if (!item.available) {
-              return (
-                <div
-                  key={item.href}
-                  aria-disabled="true"
-                  title={collapsed ? item.label + " — coming soon" : undefined}
-                  className={sharedClass + " cursor-not-allowed text-slate-400"}
-                >
-                  <Icon aria-hidden="true" className="size-4.5 shrink-0" />
-                  {!collapsed && (
-                    <>
-                      <span>{item.label}</span>
-                      <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Soon</span>
-                    </>
-                  )}
-                </div>
-              );
-            }
 
             return (
               <Link

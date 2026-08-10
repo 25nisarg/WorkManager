@@ -62,8 +62,6 @@ export type AssignmentFormValues = Pick<
   | "notes"
 >;
 
-export type AssignmentFinancialSummary = Record<string, unknown>;
-
 export type AssignmentActionState = {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;

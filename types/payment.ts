@@ -15,6 +15,7 @@ export type PaymentAssignment = {
   task_code: string;
   title: string;
   received_from_id: string;
+  currency: string;
 };
 
 export type PaymentAllocation = {

@@ -46,8 +46,8 @@ export function ExpenseDialog({
   const editing = Boolean(expenseId);
   const categoryListId = "expense-category-suggestions-" + (expenseId ?? "new");
   const action = expenseId
-    ? updateExpense.bind(null, expenseId)
-    : createExpense;
+    ? updateExpense.bind(null, expenseId, returnToAssignment ? defaultAssignmentId ?? null : null)
+    : createExpense.bind(null, returnToAssignment ? defaultAssignmentId ?? null : null);
   const [state, formAction, pending] = useActionState(action, {});
   const submitted = state.values;
   const selectedAssignment = asText(
@@ -117,15 +117,21 @@ export function ExpenseDialog({
               <label htmlFor={"expense-currency-" + (expenseId ?? "new")} className="block text-sm font-medium text-slate-700">Currency *</label>
               <select id={"expense-currency-" + (expenseId ?? "new")} name="currency" defaultValue={currency} className={fieldClass}>{currencies.map((item) => <option key={item} value={item}>{item}</option>)}</select>
             </div>
+            {returnToAssignment ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Assignment</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{assignments.find((assignment) => assignment.id === selectedAssignment)?.task_code} — {assignments.find((assignment) => assignment.id === selectedAssignment)?.title}</p>
+                <p className="mt-1 text-xs text-slate-500">This expense is automatically linked to the current assignment.</p>
+              </div>
+            ) : (
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor={"expense-assignment-" + (expenseId ?? "new")} className="block text-sm font-medium text-slate-700">Assignment <span className="font-normal text-slate-400">(optional)</span></label>
               <select id={"expense-assignment-" + (expenseId ?? "new")} name="assignment_id" defaultValue={selectedAssignment} disabled={returnToAssignment} aria-invalid={Boolean(state.fieldErrors?.assignment_id)} className={fieldClass}>
                 <option value="">General business expense</option>
                 {assignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.task_code} — {assignment.title}</option>)}
               </select>
-              {returnToAssignment && <input type="hidden" name="assignment_id" value={selectedAssignment} />}
               {state.fieldErrors?.assignment_id && <p className="text-xs text-red-600">{state.fieldErrors.assignment_id[0]}</p>}
-            </div>
+            </div>)}
             <div className="space-y-2">
               <label htmlFor={"expense-method-" + (expenseId ?? "new")} className="block text-sm font-medium text-slate-700">Payment method *</label>
               <select id={"expense-method-" + (expenseId ?? "new")} name="payment_method" defaultValue={asText(submitted?.payment_method, initialValues?.payment_method ?? "bank_transfer")} className={fieldClass}>{PAYMENT_METHODS.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}</select>

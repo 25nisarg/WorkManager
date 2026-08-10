@@ -1,55 +1,31 @@
 import type { Metadata } from "next";
-import {
-  BanknoteArrowDown,
-  BanknoteArrowUp,
-  BriefcaseBusiness,
-  CircleDollarSign,
-  Clock3,
-  HandCoins,
-  Landmark,
-  TrendingUp,
-} from "lucide-react";
-import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import { DashboardMetrics } from "@/components/dashboard/dashboard-metrics";
+import { MonthlyFinancialCharts } from "@/components/dashboard/monthly-financial-charts";
+import { OutstandingClientPayments } from "@/components/dashboard/outstanding-client-payments";
+import { RecentAssignments } from "@/components/dashboard/recent-assignments";
+import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
+import { WriterPayables } from "@/components/dashboard/writer-payables";
 import { PageHeader } from "@/components/layout/page-header";
+import { getDashboardData } from "@/lib/queries/dashboard";
+import { requireAuthenticatedOwnerId } from "@/lib/supabase/auth";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-const metrics = [
-  { label: "Total Work Value", icon: BriefcaseBusiness },
-  { label: "Amount Received", icon: BanknoteArrowDown },
-  { label: "Client Outstanding", icon: Clock3 },
-  { label: "Writer Cost", icon: HandCoins },
-  { label: "Writer Payable", icon: BanknoteArrowUp },
-  { label: "Expected Net Profit", icon: TrendingUp },
-  { label: "Current Cash Flow", icon: Landmark },
-  { label: "Active Assignments", icon: CircleDollarSign },
-];
-
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const ownerId = await requireAuthenticatedOwnerId();
+  const data = await getDashboardData(ownerId);
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Workspace overview"
-        title="Dashboard"
-        description="A clear view of your assignments, finances, and upcoming work."
-      />
-
-      <section aria-labelledby="key-metrics-heading">
-        <h2 id="key-metrics-heading" className="sr-only">Key metrics</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
-        </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
-        <DashboardPanel title="Recent assignments" description="Your latest work will appear here once assignment management is added." />
-        <DashboardPanel title="Upcoming deadlines" description="Upcoming and overdue work will appear here when deadlines are connected." />
+      <PageHeader eyebrow="Workspace overview" title="Dashboard" description="A current view of assignment value, cash movement, balances, and delivery priorities." />
+      <DashboardMetrics summary={data.summary} error={data.errors.summary} />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
+        <RecentAssignments assignments={data.recentAssignments} error={data.errors.assignments} />
+        <UpcomingDeadlines deadlines={data.deadlines} error={data.errors.assignments} />
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DashboardPanel title="Revenue and profit" description="Monthly financial trends will be connected to your reporting data in a later phase." chart />
-        <DashboardPanel title="Outstanding payments" description="Client receivables and writer payables will appear here after payment workflows are implemented." />
+      <MonthlyFinancialCharts months={data.monthlyCash} excludedNonInrCashOut={data.excludedNonInrCashOut} error={data.errors.charts} />
+      <div className="grid gap-6 xl:grid-cols-2">
+        <OutstandingClientPayments items={data.outstandingClients} error={data.errors.balances} />
+        <WriterPayables items={data.writerPayables} error={data.errors.balances} />
       </div>
     </div>
   );

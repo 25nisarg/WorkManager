@@ -20,6 +20,7 @@ type WorkerPaymentDialogProps = {
   accounts: PaymentAccount[];
   initialValues?: WorkerPaymentFormValues;
   defaultAllocationId?: string;
+  lockAllocationContext?: boolean;
 };
 
 const fieldClass =
@@ -41,12 +42,13 @@ export function WorkerPaymentDialog({
   accounts,
   initialValues,
   defaultAllocationId,
+  lockAllocationContext = false,
 }: WorkerPaymentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editing = Boolean(paymentId);
   const action = paymentId
     ? updateWorkerPayment.bind(null, paymentId)
-    : createWorkerPayment;
+    : createWorkerPayment.bind(null, lockAllocationContext ? defaultAllocationId ?? null : null);
   const [state, formAction, pending] = useActionState(action, {});
   const submitted = state.values;
   const initialAllocationId = asText(
@@ -85,7 +87,14 @@ export function WorkerPaymentDialog({
           </div>
           <div className="grid gap-5 p-5 sm:grid-cols-2">
             {state.error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{state.error}</div>}
-            <div className="space-y-2 sm:col-span-2">
+            {lockAllocationContext && !editing ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Writer allocation</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{selectedAllocation?.assignment?.task_code} — {selectedAllocation?.writer?.name}</p>
+                <p className="mt-1 text-xs text-slate-500">Assignment and writer are inferred from this allocation.</p>
+                <input type="hidden" name="assignment_worker_id" value={initialAllocationId} />
+              </div>
+            ) : <div className="space-y-2 sm:col-span-2">
               <label htmlFor={"worker-payment-allocation-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Writer allocation *</label>
               <select
                 id={"worker-payment-allocation-" + (paymentId ?? "new")}
@@ -108,7 +117,7 @@ export function WorkerPaymentDialog({
                 ))}
               </select>
               {state.fieldErrors?.assignment_worker_id && <p className="text-xs text-red-600">{state.fieldErrors.assignment_worker_id[0]}</p>}
-            </div>
+            </div>}
             <div className="space-y-2 sm:col-span-2">
               <span className="block text-sm font-medium text-slate-700">Writer</span>
               <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700">
@@ -119,12 +128,18 @@ export function WorkerPaymentDialog({
               <label htmlFor={"worker-payment-date-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Payment date *</label>
               <input id={"worker-payment-date-" + (paymentId ?? "new")} name="payment_date" type="date" defaultValue={asText(submitted?.payment_date, initialValues?.payment_date ?? todayInputValue())} className={fieldClass} />
             </div>
-            <div className="space-y-2">
+            {lockAllocationContext && !editing ? (
+              <div className="space-y-2">
+                <span className="block text-sm font-medium text-slate-700">Currency</span>
+                <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700">{selectedAllocation?.currency ?? currency}</div>
+                <input type="hidden" name="currency" value={selectedAllocation?.currency ?? currency} />
+              </div>
+            ) : <div className="space-y-2">
               <label htmlFor={"worker-payment-currency-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Currency</label>
               <select id={"worker-payment-currency-" + (paymentId ?? "new")} name="currency" value={currency} onChange={(event) => setCurrency(event.target.value)} className={fieldClass}>
                 {currencies.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
-            </div>
+            </div>}
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor={"worker-payment-amount-" + (paymentId ?? "new")} className="block text-sm font-medium text-slate-700">Amount *</label>
               <input id={"worker-payment-amount-" + (paymentId ?? "new")} name="amount" type="number" min="0.01" step="0.01" defaultValue={asText(submitted?.amount, String(initialValues?.amount ?? ""))} aria-invalid={Boolean(state.fieldErrors?.amount)} className={fieldClass} />

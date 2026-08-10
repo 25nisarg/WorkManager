@@ -5,35 +5,54 @@ import {
   FileText,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { DataError } from "@/components/ui/data-error";
+import { CurrencyValues } from "@/components/ui/currency-values";
 import { DeadlineIndicator } from "./deadline-indicator";
-import { getFinancialSummaryNumber } from "@/lib/utils/financial-summary";
+import { groupCurrencyAmounts, subtractCurrencyAmounts } from "@/lib/utils/currency";
+import { calculateAssignmentInrFinancials } from "@/lib/utils/financial-model";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
-import type {
-  Assignment,
-  AssignmentFinancialSummary,
-} from "@/types/assignment";
+import type { ExpensesData } from "@/lib/queries/expenses";
+import type { PaymentsData } from "@/lib/queries/payments";
+import type { Assignment } from "@/types/assignment";
+import type { AssignmentWorker } from "@/types/assignment-worker";
 
 export function AssignmentDetails({
   assignment,
-  financialSummary,
-  financialError,
+  allocations,
+  payments,
+  expenses,
 }: {
   assignment: Assignment;
-  financialSummary: AssignmentFinancialSummary | null;
-  financialError?: string;
+  allocations: AssignmentWorker[];
+  payments: PaymentsData;
+  expenses: ExpensesData;
 }) {
+  const matchingClientPayments = payments.clientPayments.filter((payment) => payment.currency_original === assignment.currency);
+  const unmatchedClientPayments = payments.clientPayments.length - matchingClientPayments.length;
+  const clientReceived = matchingClientPayments.reduce((sum, payment) => sum + payment.amount_original, 0);
+  const actualInrReceived = payments.clientPayments.reduce((sum, payment) => sum + payment.amount_inr, 0);
+  const activeAllocations = allocations.filter((allocation) => allocation.status !== "cancelled");
+  const workerCosts = groupCurrencyAmounts(activeAllocations, (allocation) => allocation.currency, (allocation) => allocation.agreed_cost);
+  const workerPaid = groupCurrencyAmounts(payments.workerPayments, (payment) => payment.currency, (payment) => payment.amount);
+  const expenseTotals = groupCurrencyAmounts(expenses.expenses, (expense) => expense.currency, (expense) => expense.amount);
+  const financials = calculateAssignmentInrFinancials({
+    workMode: assignment.work_mode,
+    actualInrReceived,
+    workerCosts: activeAllocations,
+    workerPayments: payments.workerPayments,
+    expenses: expenses.expenses,
+  });
+  const workerPayable = subtractCurrencyAmounts(workerCosts, workerPaid);
   const financialItems = [
-    { label: "Selling price", value: assignment.selling_price },
-    { label: "Client received", value: getFinancialSummaryNumber(financialSummary, ["client_received", "total_received", "amount_received"]) },
-    { label: "Client outstanding", value: getFinancialSummaryNumber(financialSummary, ["client_outstanding", "outstanding_amount"]) },
-    { label: "Writer cost", value: getFinancialSummaryNumber(financialSummary, ["worker_cost", "writer_cost", "total_writer_cost"]) },
-    { label: "Writer paid", value: getFinancialSummaryNumber(financialSummary, ["writer_paid", "total_writer_paid"]) },
-    { label: "Writer payable", value: getFinancialSummaryNumber(financialSummary, ["writer_payable"]) },
-    { label: "Expected gross profit", value: getFinancialSummaryNumber(financialSummary, ["expected_gross_profit", "gross_profit"]) },
-    { label: "Assignment expenses", value: getFinancialSummaryNumber(financialSummary, ["other_expenses"]) },
-    { label: "Expected net profit", value: getFinancialSummaryNumber(financialSummary, ["expected_net_profit", "net_profit"]) },
-    { label: "Current cash margin", value: getFinancialSummaryNumber(financialSummary, ["current_cash_margin", "current_cash_flow"]) },
+    { label: "Quoted price", value: formatCurrency(assignment.selling_price, assignment.currency), note: "Original assignment currency" },
+    { label: "Original amount paid", value: formatCurrency(clientReceived, assignment.currency), note: unmatchedClientPayments ? `${unmatchedClientPayments} other-currency payment(s) excluded` : "Original payments matching assignment currency" },
+    { label: "Client outstanding", value: formatCurrency(Math.max(assignment.selling_price - clientReceived, 0), assignment.currency), note: "Selling price less matching original payments" },
+    { label: "Actual INR received", value: formatCurrency(actualInrReceived, "INR"), note: "Actual amount credited" },
+    { label: "Writer agreed cost", value: <CurrencyValues values={workerCosts} />, note: assignment.work_mode === "self" ? "Not deducted from self-work profit" : "Liability from non-cancelled allocations" },
+    { label: "Writer paid", value: <CurrencyValues values={workerPaid} />, note: "Payments by original currency" },
+    { label: "Writer payable", value: <CurrencyValues values={workerPayable} />, note: "Agreed cost less matching-currency payments" },
+    { label: "Assignment expenses", value: <CurrencyValues values={expenseTotals} />, note: "Expenses by original currency" },
+    { label: "Actual profit to date", value: financials.actualProfitInr === null ? "Unavailable" : formatCurrency(financials.actualProfitInr, "INR"), note: financials.profitUnavailableReason ?? "Actual INR received to date less agreed INR writer cost and INR expenses" },
+    { label: "Current cash position", value: financials.currentCashPositionInr === null ? "Unavailable" : formatCurrency(financials.currentCashPositionInr, "INR"), note: financials.cashUnavailableReason ?? "Actual INR received less writer payments and expenses actually paid" },
   ];
 
   return (
@@ -94,14 +113,12 @@ export function AssignmentDetails({
           {financialItems.map((item) => (
             <div key={item.label} className="bg-white p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
-              <p className={"mt-2 text-lg font-semibold " + (item.value === null ? "text-slate-400" : "text-slate-900")}>
-                {item.value === null ? "Not available" : formatCurrency(item.value, assignment.currency)}
-              </p>
+              <div className="mt-2 text-lg font-semibold text-slate-900">{item.value}</div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{item.note}</p>
             </div>
           ))}
         </div>
       </Card>
-      {financialError && <DataError message={financialError} />}
 
       <Card className="p-5">
         <div className="flex items-center gap-3">

@@ -43,7 +43,7 @@ const clientPaymentColumns =
   "id, owner_id, assignment_id, payer_id, payment_date, amount_original, currency_original, exchange_rate, amount_inr, payment_method, transaction_reference, notes, created_at, payment_account_id";
 const workerPaymentColumns =
   "id, owner_id, assignment_worker_id, worker_id, payment_date, amount, currency, payment_method, transaction_reference, notes, created_at, payment_account_id";
-const assignmentColumns = "id, task_code, title, received_from_id";
+const assignmentColumns = "id, task_code, title, received_from_id, currency";
 const contactColumns = "id, name, company_name";
 const allocationColumns =
   "id, assignment_id, worker_id, work_description, currency";

@@ -59,6 +59,7 @@ export function AssignmentPaymentsSection({
                 accounts={payments.accounts}
                 defaultAssignmentId={assignment.id}
                 defaultPayerId={defaultPayer}
+                lockAssignmentContext
               />
             </div>
             <ClientPaymentsTable payments={payments.clientPayments} options={options} />
@@ -71,10 +72,11 @@ export function AssignmentPaymentsSection({
                 <h3 className="font-semibold text-slate-900">Writer payments</h3>
                 <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{payments.workerPayments.length}</span>
               </div>
-              <WorkerPaymentDialog
-                allocations={scopedAllocations}
-                accounts={payments.accounts}
-              />
+              <div className="flex flex-wrap gap-2">
+                {scopedAllocations.filter((allocation) => allocation.writer).map((allocation) => (
+                  <WorkerPaymentDialog key={allocation.id} allocations={[allocation]} accounts={payments.accounts} defaultAllocationId={allocation.id} lockAllocationContext />
+                ))}
+              </div>
             </div>
             <WorkerPaymentsTable payments={payments.workerPayments} options={options} />
           </div>

@@ -61,7 +61,7 @@ export function ExpenseTable({
         </h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
           {assignmentContext
-            ? "Add an assignment-specific expense to include it in expected net profit."
+            ? "Add an assignment-specific expense to include it in actual profit and cash position."
             : "Add your first business expense to begin tracking operating costs."}
         </p>
       </Card>

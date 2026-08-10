@@ -140,6 +140,20 @@ async function verifyAssignment(
   return { valid: Boolean(data), error };
 }
 
+async function getOwnedAssignmentSource(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
+  assignmentId: string
+) {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("id, received_from_id")
+    .eq("id", assignmentId)
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  return { assignment: data, error };
+}
+
 async function verifyPayer(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ownerId: string,
@@ -191,7 +205,7 @@ async function verifyAllocation(
 ) {
   const { data, error } = await supabase
     .from("assignment_workers")
-    .select("id, assignment_id, worker_id")
+    .select("id, assignment_id, worker_id, currency")
     .eq("id", allocationId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -226,18 +240,30 @@ function refreshPaymentPaths(assignmentIds: Array<string | null | undefined>) {
 }
 
 export async function createClientPayment(
+  assignmentContextId: string | null,
   _previousState: PaymentActionState,
   formData: FormData
 ): Promise<PaymentActionState> {
+  const { supabase, user } = await authenticatedMutationContext();
   const values = clientFormValues(formData);
+  if (!user) {
+    return { error: "Your session has expired. Please sign in again.", values };
+  }
+
+  if (assignmentContextId) {
+    const contextId = paymentIdSchema.safeParse(assignmentContextId);
+    if (!contextId.success) return { error: "This assignment link is invalid.", values };
+    const sourceResult = await getOwnedAssignmentSource(supabase, user.id, contextId.data);
+    if (sourceResult.error) return { error: "We could not verify the assignment source.", values };
+    if (!sourceResult.assignment) return { error: "This assignment does not exist or is not yours.", values };
+    if (!sourceResult.assignment.received_from_id) return { error: "Add a client/source to this assignment before recording a payment.", values };
+    values.assignment_id = sourceResult.assignment.id;
+    values.payer_id = sourceResult.assignment.received_from_id;
+  }
+
   const parsed = clientPaymentSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
-  }
-
-  const { supabase, user } = await authenticatedMutationContext();
-  if (!user) {
-    return { error: "Your session has expired. Please sign in again.", values };
   }
 
   const [assignmentCheck, payerCheck, accountCheck] = await Promise.all([
@@ -342,10 +368,12 @@ export async function updateClientPayment(
 }
 
 export async function createWorkerPayment(
+  allocationContextId: string | null,
   _previousState: PaymentActionState,
   formData: FormData
 ): Promise<PaymentActionState> {
   const values = workerFormValues(formData);
+  if (allocationContextId) values.assignment_worker_id = allocationContextId;
   const parsed = workerPaymentSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
@@ -381,7 +409,12 @@ export async function createWorkerPayment(
   const allocation = allocationCheck.allocation;
   const { error } = await supabase.from("worker_payments").insert({
     owner_id: user.id,
-    ...workerPayload(parsed.data, allocation.worker_id),
+    ...workerPayload(
+      allocationContextId
+        ? { ...parsed.data, currency: allocation.currency }
+        : parsed.data,
+      allocation.worker_id
+    ),
   });
   if (error) {
     logDatabaseError("paid", "create", "worker_payments.insert", user.id, null, error);

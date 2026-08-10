@@ -4,7 +4,12 @@ import LoginForm from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-export default function LoginPage() {
+type Props = {
+  searchParams: Promise<{ password_reset?: string; auth_error?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: Props) {
+  const params = await searchParams;
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12 sm:px-6">
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-indigo-600" />
@@ -25,6 +30,16 @@ export default function LoginPage() {
               Sign in to manage your work, deadlines, and finances.
             </p>
           </div>
+          {params.password_reset === "success" && (
+            <div role="status" className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-700">
+              Your password was reset. Sign in with your new password.
+            </div>
+          )}
+          {params.auth_error === "invalid_link" && (
+            <div role="alert" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+              That authentication link is invalid or has expired. Request a new password reset link.
+            </div>
+          )}
           <LoginForm />
         </section>
 
