@@ -113,6 +113,7 @@ export function AssignmentForm({
   submitLabel,
   cancelHref,
 }: AssignmentFormProps) {
+  const editing = Boolean(initialValues);
   const actionWithTimezone = (
     state: AssignmentActionState,
     formData: FormData
@@ -229,17 +230,17 @@ export function AssignmentForm({
           <p className="mt-1 text-sm text-slate-500">Agreed assignment value and copy pricing.</p>
         </div>
         <div className="space-y-5 p-5">
-          <fieldset>
-            <legend className="text-sm font-medium text-slate-700">Pricing type</legend>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <fieldset className="flex flex-wrap items-center gap-3">
+            <legend className="mr-1 text-sm font-medium text-slate-700">Pricing type</legend>
+            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
               {PRICING_TYPES.map((type) => (
                 <label
                   key={type.value}
                   className={
-                    "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-medium transition " +
+                    "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition " +
                     (pricingType === type.value
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-800"
-                      : "border-slate-200 text-slate-700 hover:border-slate-300")
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900")
                   }
                 >
                   <input
@@ -248,7 +249,7 @@ export function AssignmentForm({
                     value={type.value}
                     checked={pricingType === type.value}
                     onChange={() => setPricingType(type.value)}
-                    className="size-4 accent-indigo-600"
+                    className="sr-only"
                   />
                   {type.label}
                 </label>
@@ -344,13 +345,17 @@ export function AssignmentForm({
           <h2 id="assignment-workflow" className="font-semibold text-slate-900">Workflow</h2>
           <p className="mt-1 text-sm text-slate-500">Current status, priority, and delivery approach.</p>
         </div>
-        <div className="grid gap-5 p-5 sm:grid-cols-3">
-          <div className="space-y-2">
-            <label htmlFor="status" className="block text-sm font-medium text-slate-700">Status</label>
-            <select id="status" name="status" defaultValue={asText(submitted?.status, initialValues?.status ?? "new")} className={selectClass}>
-              {ASSIGNMENT_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </div>
+        <div className={"grid gap-5 p-5 " + (editing ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          {editing ? (
+            <div className="space-y-2">
+              <label htmlFor="status" className="block text-sm font-medium text-slate-700">Status</label>
+              <select id="status" name="status" defaultValue={asText(submitted?.status, initialValues?.status ?? "new")} className={selectClass}>
+                {ASSIGNMENT_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="status" value="new" />
+          )}
           <div className="space-y-2">
             <label htmlFor="priority" className="block text-sm font-medium text-slate-700">Priority</label>
             <select id="priority" name="priority" defaultValue={asText(submitted?.priority, initialValues?.priority ?? "normal")} className={selectClass}>
@@ -366,11 +371,13 @@ export function AssignmentForm({
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="assignment-context">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 id="assignment-context" className="font-semibold text-slate-900">Description and notes</h2>
-        </div>
-        <div className="grid gap-5 p-5 lg:grid-cols-2">
+      <details className="group rounded-xl border border-slate-200 bg-white shadow-sm" open={Boolean(initialValues?.description || initialValues?.notes || state.fieldErrors?.description || state.fieldErrors?.notes)}>
+        <summary className="cursor-pointer list-none px-5 py-4 font-semibold text-slate-900 marker:hidden">
+          <span className="flex items-center justify-between gap-3">
+            More details <span className="text-sm font-normal text-slate-500 group-open:hidden">Optional</span>
+          </span>
+        </summary>
+        <div className="grid gap-5 border-t border-slate-100 p-5 lg:grid-cols-2">
           {[
             { name: "description", label: "Description", placeholder: "Scope, deliverables, and requirements…", value: asText(submitted?.description, initialValues?.description ?? "") },
             { name: "notes", label: "Internal notes", placeholder: "Private context and reminders…", value: asText(submitted?.notes, initialValues?.notes ?? "") },
@@ -382,7 +389,7 @@ export function AssignmentForm({
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Link href={cancelHref} className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Cancel</Link>

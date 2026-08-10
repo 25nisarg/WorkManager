@@ -14,8 +14,13 @@ import {
 import type { PaymentActionState } from "@/types/payment";
 
 function clientFormValues(formData: FormData) {
+  let allocations: unknown = [];
+  try {
+    allocations = JSON.parse(String(formData.get("allocations") ?? "[]"));
+  } catch {
+    allocations = [];
+  }
   return {
-    assignment_id: String(formData.get("assignment_id") ?? ""),
     payer_id: String(formData.get("payer_id") ?? ""),
     payment_date: String(formData.get("payment_date") ?? ""),
     amount_original: String(formData.get("amount_original") ?? ""),
@@ -28,6 +33,7 @@ function clientFormValues(formData: FormData) {
       formData.get("transaction_reference") ?? ""
     ),
     notes: String(formData.get("notes") ?? ""),
+    allocations,
   };
 }
 
@@ -50,7 +56,6 @@ function workerFormValues(formData: FormData) {
 
 function clientPayload(input: ClientPaymentInput) {
   return {
-    assignment_id: input.assignment_id,
     payer_id: input.payer_id,
     payment_date: input.payment_date,
     amount_original: input.amount_original,
@@ -86,6 +91,9 @@ function databaseMessage(error: PostgrestError, operation: "save" | "delete") {
   }
   if (error.code === "23505") {
     return "This payment transaction already exists.";
+  }
+  if (error.code === "23514" || error.code === "22023") {
+    return "Payment allocations must be complete and equal the transaction totals.";
   }
   if (error.code === "42501") {
     return "You do not have permission to change this payment.";
@@ -226,10 +234,26 @@ async function verifyAllocation(
 }
 
 function invalidState(
-  values: Record<string, string>,
+  values: Record<string, unknown>,
   fieldErrors: Record<string, string[] | undefined>
 ): PaymentActionState {
   return { values, fieldErrors };
+}
+
+async function verifyClientAssignments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
+  payerId: string,
+  assignmentIds: string[],
+  currency: string
+) {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("id, currency")
+    .eq("owner_id", ownerId)
+    .eq("received_from_id", payerId)
+    .in("id", assignmentIds);
+  return { valid: !error && (data?.length ?? 0) === assignmentIds.length && (data ?? []).every((assignment) => assignment.currency === currency), error };
 }
 
 function refreshPaymentPaths(assignmentIds: Array<string | null | undefined>) {
@@ -257,8 +281,8 @@ export async function createClientPayment(
     if (sourceResult.error) return { error: "We could not verify the assignment source.", values };
     if (!sourceResult.assignment) return { error: "This assignment does not exist or is not yours.", values };
     if (!sourceResult.assignment.received_from_id) return { error: "Add a client/source to this assignment before recording a payment.", values };
-    values.assignment_id = sourceResult.assignment.id;
     values.payer_id = sourceResult.assignment.received_from_id;
+    values.allocations = [{ assignment_id: sourceResult.assignment.id, amount_original: values.amount_original, amount_inr: values.amount_inr }];
   }
 
   const parsed = clientPaymentSchema.safeParse(values);
@@ -266,8 +290,9 @@ export async function createClientPayment(
     return invalidState(values, parsed.error.flatten().fieldErrors);
   }
 
+  const assignmentIds = parsed.data.allocations.map((allocation) => allocation.assignment_id);
   const [assignmentCheck, payerCheck, accountCheck] = await Promise.all([
-    verifyAssignment(supabase, user.id, parsed.data.assignment_id),
+    verifyClientAssignments(supabase, user.id, parsed.data.payer_id, assignmentIds, parsed.data.currency_original),
     verifyPayer(supabase, user.id, parsed.data.payer_id),
     verifyPaymentAccount(
       supabase,
@@ -280,7 +305,7 @@ export async function createClientPayment(
   }
   if (!assignmentCheck.valid) {
     return invalidState(values, {
-      assignment_id: ["Select one of your assignments."],
+      allocations: ["Select only this payer's assignments in the payment currency."],
     });
   }
   if (!payerCheck.valid) {
@@ -294,17 +319,18 @@ export async function createClientPayment(
     });
   }
 
-  const { error } = await supabase.from("client_payments").insert({
-    owner_id: user.id,
-    ...clientPayload(parsed.data),
+  const { data: paymentId, error } = await supabase.rpc("create_client_payment_transaction", {
+    p_payment: clientPayload(parsed.data),
+    p_allocations: parsed.data.allocations,
   });
   if (error) {
     logDatabaseError("received", "create", "client_payments.insert", user.id, null, error);
     return { error: databaseMessage(error, "save"), values };
   }
 
-  refreshPaymentPaths([parsed.data.assignment_id]);
-  redirect("/assignments/" + parsed.data.assignment_id);
+  void paymentId;
+  refreshPaymentPaths(assignmentIds);
+  redirect(assignmentContextId ? "/assignments/" + assignmentContextId : "/payments?view=received");
 }
 
 export async function updateClientPayment(
@@ -328,7 +354,7 @@ export async function updateClientPayment(
 
   const { data: existing, error: lookupError } = await supabase
     .from("client_payments")
-    .select("id, assignment_id")
+    .select("id")
     .eq("id", idResult.data)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -337,8 +363,15 @@ export async function updateClientPayment(
   }
   if (!existing) return { error: "This payment no longer exists.", values };
 
+  const { data: oldAllocations, error: oldAllocationError } = await supabase
+    .from("client_payment_allocations")
+    .select("assignment_id")
+    .eq("client_payment_id", idResult.data)
+    .eq("owner_id", user.id);
+  if (oldAllocationError) return { error: databaseMessage(oldAllocationError, "save"), values };
+  const assignmentIds = parsed.data.allocations.map((allocation) => allocation.assignment_id);
   const [assignmentCheck, payerCheck, accountCheck] = await Promise.all([
-    verifyAssignment(supabase, user.id, parsed.data.assignment_id),
+    verifyClientAssignments(supabase, user.id, parsed.data.payer_id, assignmentIds, parsed.data.currency_original),
     verifyPayer(supabase, user.id, parsed.data.payer_id),
     verifyPaymentAccount(
       supabase,
@@ -353,18 +386,18 @@ export async function updateClientPayment(
     return { error: "Select an assignment, payer, and account that belong to you.", values };
   }
 
-  const { error } = await supabase
-    .from("client_payments")
-    .update(clientPayload(parsed.data))
-    .eq("id", idResult.data)
-    .eq("owner_id", user.id);
+  const { error } = await supabase.rpc("update_client_payment_transaction", {
+    p_payment_id: idResult.data,
+    p_payment: clientPayload(parsed.data),
+    p_allocations: parsed.data.allocations,
+  });
   if (error) {
     logDatabaseError("received", "update", "client_payments.update", user.id, idResult.data, error);
     return { error: databaseMessage(error, "save"), values };
   }
 
-  refreshPaymentPaths([existing.assignment_id, parsed.data.assignment_id]);
-  redirect("/assignments/" + parsed.data.assignment_id);
+  refreshPaymentPaths([...(oldAllocations ?? []).map((row) => row.assignment_id), ...assignmentIds]);
+  redirect("/payments?view=received");
 }
 
 export async function createWorkerPayment(
@@ -522,29 +555,33 @@ async function deletePayment(
 
   const { supabase, user } = await authenticatedMutationContext();
   if (!user) return { error: "Your session has expired. Please sign in again." };
-  let assignmentId: string;
+  let assignmentId: string | null = null;
 
   if (direction === "received") {
     const { data: payment, error: lookupError } = await supabase
       .from("client_payments")
-      .select("id, assignment_id")
+      .select("id")
       .eq("id", idResult.data)
       .eq("owner_id", user.id)
       .maybeSingle();
     if (lookupError) return { error: databaseMessage(lookupError, "delete") };
     if (!payment) return { error: "This payment no longer exists." };
 
-    const { error } = await supabase
-      .from("client_payments")
-      .delete()
-      .eq("id", idResult.data)
+    const { data: allocationRows, error: allocationError } = await supabase
+      .from("client_payment_allocations")
+      .select("assignment_id")
+      .eq("client_payment_id", idResult.data)
       .eq("owner_id", user.id);
+    if (allocationError) return { error: databaseMessage(allocationError, "delete") };
+    const { error } = await supabase.rpc("delete_client_payment_transaction", {
+      p_payment_id: idResult.data,
+    });
     if (error) {
       logDatabaseError(direction, "delete", "client_payments.delete", user.id, idResult.data, error);
       return { error: databaseMessage(error, "delete") };
     }
-    refreshPaymentPaths([payment.assignment_id]);
-    assignmentId = payment.assignment_id;
+    refreshPaymentPaths((allocationRows ?? []).map((row) => row.assignment_id));
+    assignmentId = allocationRows?.length === 1 ? allocationRows[0].assignment_id : null;
   } else {
     const { data: payment, error: lookupError } = await supabase
       .from("worker_payments")
@@ -576,5 +613,5 @@ async function deletePayment(
     assignmentId = allocation.allocation.assignment_id;
   }
 
-  redirect("/assignments/" + assignmentId);
+  redirect(assignmentId ? "/assignments/" + assignmentId : "/payments?view=" + (direction === "received" ? "received" : "paid"));
 }

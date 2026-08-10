@@ -7,11 +7,10 @@ import {
   AssignmentStatusBadge,
   WorkModeBadge,
 } from "@/components/assignments/assignment-badges";
-import { AssignmentDetails } from "@/components/assignments/assignment-details";
+import { AssignmentFinancialSummary, AssignmentNotes, AssignmentOverview } from "@/components/assignments/assignment-workflow-details";
 import { AssignmentWriterSection } from "@/components/assignments/assignment-writer-section";
-import { AssignmentPaymentsSection } from "@/components/payments/assignment-payments-section";
+import { AssignmentClientPaymentsSection, AssignmentWriterPaymentsSection } from "@/components/payments/assignment-payments-section";
 import { AssignmentExpensesSection } from "@/components/expenses/assignment-expenses-section";
-import { AssignmentFilesPlaceholder } from "@/components/assignments/assignment-files-placeholder";
 import { DeleteAssignmentDialog } from "@/components/assignments/delete-assignment-dialog";
 import { DataError } from "@/components/ui/data-error";
 import { getAssignment } from "@/lib/queries/assignments";
@@ -20,6 +19,7 @@ import { getPaymentsData } from "@/lib/queries/payments";
 import { getExpensesData } from "@/lib/queries/expenses";
 import { requireAuthenticatedOwnerId } from "@/lib/supabase/auth";
 import { assignmentIdSchema } from "@/lib/validations/assignment";
+import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Assignment details" };
 
@@ -59,6 +59,9 @@ export default async function AssignmentDetailPage({
                 <AssignmentPriorityBadge priority={result.assignment.priority} />
                 <WorkModeBadge workMode={result.assignment.work_mode} />
               </div>
+              <p className="mt-3 text-sm text-slate-500">
+                {result.assignment.received_from?.name ?? "Unavailable source"} <span aria-hidden="true">·</span> {formatCurrency(result.assignment.selling_price, result.assignment.currency)} <span aria-hidden="true">·</span> Due {formatDateTime(result.assignment.client_deadline)} <span aria-hidden="true">·</span> {result.assignment.work_mode === "self" ? "Self" : result.assignment.work_mode === "outsourced" ? "Outsourced" : "Mixed"}
+              </p>
             </div>
             <div className="flex shrink-0 gap-3">
               <Link href={"/assignments/" + id + "/edit"} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
@@ -67,28 +70,26 @@ export default async function AssignmentDetailPage({
               <DeleteAssignmentDialog assignmentId={id} taskCode={result.assignment.task_code} />
             </div>
           </div>
+          <AssignmentOverview assignment={result.assignment} />
           <AssignmentWriterSection
             assignment={result.assignment}
             allocations={workerResult.data.allocations}
             eligibleWriters={workerResult.data.eligibleWriters}
+            payments={paymentResult}
             error={workerResult.error}
           />
-          <AssignmentPaymentsSection
+          <AssignmentClientPaymentsSection
             assignment={result.assignment}
             payments={paymentResult}
           />
+          <AssignmentFinancialSummary assignment={result.assignment} allocations={workerResult.data.allocations} payments={paymentResult} expenses={expenseResult} />
+          <AssignmentWriterPaymentsSection assignment={result.assignment} payments={paymentResult} />
           <AssignmentExpensesSection
             assignmentId={id}
             currency={result.assignment.currency}
             data={expenseResult}
           />
-          <AssignmentDetails
-            assignment={result.assignment}
-            allocations={workerResult.data.allocations}
-            payments={paymentResult}
-            expenses={expenseResult}
-          />
-          <AssignmentFilesPlaceholder />
+          <AssignmentNotes assignment={result.assignment} />
         </>
       )}
     </div>

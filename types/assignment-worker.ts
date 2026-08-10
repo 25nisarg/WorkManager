@@ -16,7 +16,7 @@ export type AssignmentWorker = {
   owner_id: string;
   assignment_id: string;
   worker_id: string;
-  work_description: string;
+  work_description: string | null;
   assigned_date: string;
   worker_deadline: string;
   agreed_cost: number;

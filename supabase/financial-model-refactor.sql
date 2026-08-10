@@ -1,6 +1,8 @@
 -- REVIEW ONLY: do not apply automatically.
 -- Replaces the legacy single-currency financial views with currency-aware views.
--- Existing tables and columns are unchanged.
+-- This standalone view script now expects client_payment_allocations to exist.
+-- After payment normalization, apply supabase/client-payment-allocations.sql instead;
+-- that migration includes the allocation-aware versions of these views.
 
 begin;
 
@@ -12,14 +14,15 @@ with (security_invoker = true)
 as
 with client_totals as (
   select
-    cp.owner_id,
-    cp.assignment_id,
-    sum(cp.amount_inr) as actual_inr_received,
-    sum(cp.amount_original) filter (where cp.currency_original = a.currency) as original_paid_in_assignment_currency,
+    cpa.owner_id,
+    cpa.assignment_id,
+    sum(cpa.amount_inr) as actual_inr_received,
+    sum(cpa.amount_original) filter (where cp.currency_original = a.currency) as original_paid_in_assignment_currency,
     count(*) filter (where cp.currency_original <> a.currency) as unmatched_client_payment_count
-  from public.client_payments cp
-  join public.assignments a on a.id = cp.assignment_id and a.owner_id = cp.owner_id
-  group by cp.owner_id, cp.assignment_id
+  from public.client_payment_allocations cpa
+  join public.client_payments cp on cp.id = cpa.client_payment_id and cp.owner_id = cpa.owner_id
+  join public.assignments a on a.id = cpa.assignment_id and a.owner_id = cpa.owner_id
+  group by cpa.owner_id, cpa.assignment_id
 ), worker_cost_totals as (
   select
     aw.owner_id,

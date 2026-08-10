@@ -13,10 +13,20 @@ export function calculateAssignmentInrFinancials(input: {
 }) {
   const workerCosts = input.workerCosts.filter((row) => row.status !== "cancelled");
   const externalWork = input.workMode !== "self";
+  const awaitingPayment = input.actualInrReceived === 0;
   const missingRequiredAllocation = externalWork && input.actualInrReceived > 0 && workerCosts.length === 0;
   const nonInrLiabilities = externalWork && input.actualInrReceived > 0 && workerCosts.some((row) => row.currency !== "INR");
   const nonInrExpenses = input.expenses.some((row) => row.currency !== "INR");
   const nonInrCashOut = input.workerPayments.some((row) => row.currency !== "INR") || nonInrExpenses;
+  const profitStatus = awaitingPayment
+    ? "awaiting_payment"
+    : missingRequiredAllocation
+      ? "writer_not_assigned"
+      : nonInrLiabilities
+        ? "non_inr_writer_cost"
+        : nonInrExpenses
+          ? "non_inr_expense"
+          : "available";
   const agreedWriterCostInr = externalWork
     ? workerCosts.filter((row) => row.currency === "INR").reduce((sum, row) => sum + numberValue(row.agreed_cost), 0)
     : 0;
@@ -27,13 +37,16 @@ export function calculateAssignmentInrFinancials(input: {
     agreedWriterCostInr,
     writerPaidInr,
     expensesInr,
-    actualProfitInr: !missingRequiredAllocation && !nonInrLiabilities && !nonInrExpenses
+    profitStatus,
+    actualProfitInr: !awaitingPayment && !missingRequiredAllocation && !nonInrLiabilities && !nonInrExpenses
       ? input.actualInrReceived - agreedWriterCostInr - expensesInr
       : null,
     currentCashPositionInr: nonInrCashOut
       ? null
       : input.actualInrReceived - writerPaidInr - expensesInr,
-    profitUnavailableReason: missingRequiredAllocation
+    profitUnavailableReason: awaitingPayment
+      ? "Available after the first client payment is received."
+      : missingRequiredAllocation
       ? "Add at least one writer allocation before calculating outsourced profit."
       : nonInrLiabilities || nonInrExpenses
         ? "A writer cost or expense is not in INR; no conversion was assumed."

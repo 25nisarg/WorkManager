@@ -250,7 +250,6 @@ Columns:
 |---|---|---|
 | id | uuid | PRIMARY KEY |
 | owner_id | uuid | required |
-| assignment_id | uuid | references assignments(id) |
 | payer_id | uuid | references contacts(id), nullable |
 | payment_date | date | default current_date |
 | amount_original | numeric(12,2) | required, > 0 |
@@ -262,6 +261,78 @@ Columns:
 | notes | text | nullable |
 | created_at | timestamptz | default now() |
 | payment_account_id | uuid | references payment_accounts(id), nullable |
+
+IMPORTANT:
+
+`client_payments` stores the received-payment transaction header once.
+
+It does NOT contain `assignment_id`.
+
+A single client payment may cover one or many assignments through:
+
+`public.client_payment_allocations`
+
+Direct INSERT, UPDATE, and DELETE operations on received-payment headers or
+their allocations are not permitted for authenticated application users.
+Received-payment writes must use the payment transaction RPCs documented below.
+
+---
+
+# 6A. client_payment_allocations
+
+Table:
+
+public.client_payment_allocations
+
+Columns:
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PRIMARY KEY |
+| owner_id | uuid | required, references auth.users(id) |
+| client_payment_id | uuid | required, references client_payments(id), ON DELETE CASCADE |
+| assignment_id | uuid | required, references assignments(id) |
+| amount_original | numeric(12,2) | required, > 0 |
+| amount_inr | numeric(12,2) | required, > 0 |
+| created_at | timestamptz | default now() |
+
+Unique:
+
+(client_payment_id, assignment_id)
+
+One `client_payments` transaction may have one or many assignment allocations.
+
+Allocation rules:
+
+- Every allocation must belong to the same authenticated owner as the payment.
+- Every allocated assignment must belong to the authenticated owner.
+- Every allocated assignment must have `received_from_id` equal to the payment's `payer_id`.
+- Every allocated assignment's `currency` must equal the payment's `currency_original`.
+- Cross-currency assignment allocation is not supported without an explicit conversion model.
+- Allocation `amount_original` values must sum exactly to the payment header's `amount_original`.
+- Allocation `amount_inr` values must sum exactly to the payment header's `amount_inr`.
+- Allocation rows cannot be independently inserted, updated, or deleted by authenticated application users.
+
+Received-payment RPCs:
+
+`public.create_client_payment_transaction(p_payment jsonb, p_allocations jsonb)`
+
+- Creates one payment header and all assignment allocations atomically.
+- Derives `owner_id` from `auth.uid()`.
+
+`public.update_client_payment_transaction(p_payment_id uuid, p_payment jsonb, p_allocations jsonb)`
+
+- Updates the payment header and replaces its allocations atomically.
+- Verifies the payment belongs to `auth.uid()`.
+
+`public.delete_client_payment_transaction(p_payment_id uuid)`
+
+- Deletes an owned payment transaction atomically.
+- Allocation rows are removed through `ON DELETE CASCADE`.
+
+All three RPCs validate payer ownership, optional payment-account ownership,
+assignment ownership, payer matching, currency matching, duplicate assignments,
+and allocation totals. Execution is granted only to authenticated users.
 
 ---
 
@@ -449,9 +520,13 @@ auth.users
           |       |
           |       +-- worker_payments
           |
-          +-- client_payments
+          +-- client_payment_allocations
           |
           +-- expenses
+    |
+    +-- client_payments
+          |
+          +-- client_payment_allocations
 
 payment_accounts
     |

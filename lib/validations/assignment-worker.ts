@@ -23,7 +23,6 @@ export const assignmentWorkerSchema = z
     work_description: z
       .string()
       .trim()
-      .min(1, "Work description is required.")
       .max(2000, "Work description must be 2000 characters or fewer."),
     assigned_date: dateSchema,
     worker_deadline: dateTimeSchema,

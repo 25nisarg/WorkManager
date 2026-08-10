@@ -7,7 +7,8 @@ import type { ClientOutstandingItem, DashboardAssignment, DashboardData, Dashboa
 type AssignmentRow = Omit<DashboardAssignment, "client_name" | "selling_price"> & { selling_price: number | string };
 type ContactRow = { id: string; name: string };
 type WorkerRow = { id: string; assignment_id: string; worker_id: string; agreed_cost: number | string; currency: string; status: string };
-type ClientPaymentRow = { assignment_id: string; payment_date: string; amount_original: number | string; currency_original: string; amount_inr: number | string };
+type ClientPaymentRow = { id: string; payment_date: string; amount_original: number | string; currency_original: string; amount_inr: number | string };
+type ClientAllocationRow = { client_payment_id: string; assignment_id: string; amount_original: number | string; amount_inr: number | string };
 type WorkerPaymentRow = { assignment_worker_id: string; payment_date: string; amount: number | string; currency: string };
 type ExpenseRow = { assignment_id: string | null; expense_date: string; amount: number | string; currency: string };
 
@@ -39,16 +40,17 @@ function logError(source: string, error: { code?: string; message?: string }) {
 
 export async function getDashboardData(ownerId: string): Promise<DashboardData> {
   const supabase = await createClient();
-  const [assignmentResult, contactResult, workerResult, clientPaymentResult, workerPaymentResult, expenseResult] = await Promise.all([
+  const [assignmentResult, contactResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult] = await Promise.all([
     supabase.from("assignments").select(assignmentColumns).eq("owner_id", ownerId).order("created_at", { ascending: false }),
     supabase.from("contacts").select("id, name").eq("owner_id", ownerId),
     supabase.from("assignment_workers").select("id, assignment_id, worker_id, agreed_cost, currency, status").eq("owner_id", ownerId),
-    supabase.from("client_payments").select("assignment_id, payment_date, amount_original, currency_original, amount_inr").eq("owner_id", ownerId),
+    supabase.from("client_payments").select("id, payment_date, amount_original, currency_original, amount_inr").eq("owner_id", ownerId),
+    supabase.from("client_payment_allocations").select("client_payment_id, assignment_id, amount_original, amount_inr").eq("owner_id", ownerId),
     supabase.from("worker_payments").select("assignment_worker_id, payment_date, amount, currency").eq("owner_id", ownerId),
     supabase.from("expenses").select("assignment_id, expense_date, amount, currency").eq("owner_id", ownerId),
   ]);
   const errors: DashboardData["errors"] = {};
-  const failed = [assignmentResult, contactResult, workerResult, clientPaymentResult, workerPaymentResult, expenseResult].find((result) => result.error);
+  const failed = [assignmentResult, contactResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult].find((result) => result.error);
   if (failed?.error) {
     logError("currency_aware_data", failed.error);
     errors.summary = "Dashboard totals are temporarily unavailable.";
@@ -62,6 +64,8 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
   const assignmentsById = new Map(assignments.map((row) => [row.id, row]));
   const workers = (workerResult.data ?? []) as WorkerRow[];
   const clientPayments = (clientPaymentResult.data ?? []) as ClientPaymentRow[];
+  const clientAllocations = (clientAllocationResult.data ?? []) as ClientAllocationRow[];
+  const clientPaymentsById = new Map(clientPayments.map((row) => [row.id, row]));
   const workerPayments = (workerPaymentResult.data ?? []) as WorkerPaymentRow[];
   const expenses = (expenseResult.data ?? []) as ExpenseRow[];
   const activeStatuses = new Set(["new", "assigned", "in_progress", "writer_delivered", "under_review", "ready_to_deliver", "revision"]);
@@ -69,10 +73,12 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
 
   const receivedByAssignment = new Map<string, number>();
   const unmatchedByAssignment = new Map<string, number>();
-  for (const payment of clientPayments) {
-    const assignment = assignmentsById.get(payment.assignment_id);
+  for (const allocation of clientAllocations) {
+    const payment = clientPaymentsById.get(allocation.client_payment_id);
+    const assignment = assignmentsById.get(allocation.assignment_id);
+    if (!payment) continue;
     if (!assignment) continue;
-    if (payment.currency_original === assignment.currency) receivedByAssignment.set(assignment.id, (receivedByAssignment.get(assignment.id) ?? 0) + numberValue(payment.amount_original));
+    if (payment.currency_original === assignment.currency) receivedByAssignment.set(assignment.id, (receivedByAssignment.get(assignment.id) ?? 0) + numberValue(allocation.amount_original));
     else unmatchedByAssignment.set(assignment.id, (unmatchedByAssignment.get(assignment.id) ?? 0) + 1);
   }
 
@@ -93,14 +99,14 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
     const allocationIds = new Set(assignmentWorkers.map((row) => row.id));
     const result = calculateAssignmentInrFinancials({
       workMode: assignment.work_mode,
-      actualInrReceived: clientPayments.filter((row) => row.assignment_id === assignment.id).reduce((sum, row) => sum + numberValue(row.amount_inr), 0),
+      actualInrReceived: clientAllocations.filter((row) => row.assignment_id === assignment.id).reduce((sum, row) => sum + numberValue(row.amount_inr), 0),
       workerCosts: assignmentWorkers,
       workerPayments: workerPayments.filter((row) => allocationIds.has(row.assignment_worker_id)),
       expenses: assignmentExpenses,
     });
-    if (result.actualProfitInr === null) {
+    if (result.profitStatus !== "available" && result.profitStatus !== "awaiting_payment") {
       profitUnavailableAssignments += 1;
-    } else {
+    } else if (result.actualProfitInr !== null) {
       assignmentActualProfitInr += result.actualProfitInr;
     }
   }

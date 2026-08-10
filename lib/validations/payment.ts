@@ -31,8 +31,13 @@ const commonPaymentFields = {
   notes: z.string().trim().max(4000, "Notes must be 4000 characters or fewer."),
 };
 
-export const clientPaymentSchema = z.object({
+const clientPaymentAllocationSchema = z.object({
   assignment_id: z.uuid("Select a valid assignment."),
+  amount_original: z.coerce.number().finite().positive("Allocated original amount must be greater than zero."),
+  amount_inr: z.coerce.number().finite().positive("Allocated INR amount must be greater than zero."),
+});
+
+export const clientPaymentSchema = z.object({
   payer_id: z.uuid("Select a valid payer."),
   amount_original: z.coerce
     .number()
@@ -47,7 +52,21 @@ export const clientPaymentSchema = z.object({
     .number()
     .finite()
     .positive("Actual INR received must be greater than zero."),
+  allocations: z.array(clientPaymentAllocationSchema).min(1, "Allocate this payment to at least one assignment."),
   ...commonPaymentFields,
+}).superRefine((value, context) => {
+  const assignmentIds = value.allocations.map((allocation) => allocation.assignment_id);
+  if (new Set(assignmentIds).size !== assignmentIds.length) {
+    context.addIssue({ code: "custom", path: ["allocations"], message: "Each assignment can be allocated only once." });
+  }
+  const originalAllocated = value.allocations.reduce((sum, row) => sum + row.amount_original, 0);
+  const inrAllocated = value.allocations.reduce((sum, row) => sum + row.amount_inr, 0);
+  if (Math.abs(originalAllocated - value.amount_original) > 0.009) {
+    context.addIssue({ code: "custom", path: ["allocations"], message: "Original allocations must equal the payment total." });
+  }
+  if (Math.abs(inrAllocated - value.amount_inr) > 0.009) {
+    context.addIssue({ code: "custom", path: ["allocations"], message: "INR allocations must equal the actual INR received." });
+  }
 });
 
 export const workerPaymentSchema = z.object({

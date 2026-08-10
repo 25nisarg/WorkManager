@@ -26,7 +26,7 @@ type WorkerPaymentDialogProps = {
 const fieldClass =
   "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 aria-[invalid=true]:border-red-400";
 
-function asText(value: string | undefined, fallback = "") {
+function asText(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 

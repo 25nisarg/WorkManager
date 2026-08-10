@@ -7,6 +7,7 @@ import {
   updateAssignmentWorker,
 } from "@/lib/actions/assignment-workers";
 import { ASSIGNMENT_WORKER_STATUSES } from "@/lib/constants/assignment-workers";
+import { COMMON_CURRENCIES } from "@/lib/constants/contacts";
 import type {
   AssignmentWorkerActionState,
   AssignmentWorkerFormValues,
@@ -20,13 +21,14 @@ type AssignmentWorkerDialogProps = {
   assignedWriterIds: string[];
   initialValues?: AssignmentWorkerFormValues;
   subdued?: boolean;
+  createLabel?: string;
 };
 
 const fieldClass =
   "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 aria-[invalid=true]:border-red-400";
 
-function asText(value: string | undefined, fallback = "") {
-  return typeof value === "string" ? value : fallback;
+function asText(value: string | null | undefined, fallback: string | null | undefined = "") {
+  return typeof value === "string" ? value : fallback ?? "";
 }
 
 function toLocalDateTime(value?: string | null) {
@@ -46,6 +48,7 @@ export function AssignmentWorkerDialog({
   assignedWriterIds,
   initialValues,
   subdued = false,
+  createLabel = "Assign writer",
 }: AssignmentWorkerDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editing = Boolean(allocationId);
@@ -88,7 +91,7 @@ export function AssignmentWorkerDialog({
         }
       >
         {editing ? <Pencil aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
-        {editing ? "Edit" : "Add writer"}
+        {editing ? "Edit" : createLabel}
       </button>
 
       <dialog
@@ -98,7 +101,6 @@ export function AssignmentWorkerDialog({
       >
         <form action={formAction}>
           <input type="hidden" name="assigned_date" value={assignedDate} />
-          <input type="hidden" name="currency" value={allocationCurrency} />
           <input type="hidden" name="delivered_at" value={toLocalDateTime(deliveredAt)} />
           <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4">
             <div>
@@ -135,7 +137,7 @@ export function AssignmentWorkerDialog({
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <label htmlFor={"work_description-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Work description *</label>
+              <label htmlFor={"work_description-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Work description <span className="font-normal text-slate-400">(optional)</span></label>
               <textarea
                 id={"work_description-" + (allocationId ?? "new")}
                 name="work_description"
@@ -160,12 +162,22 @@ export function AssignmentWorkerDialog({
               {state.fieldErrors?.agreed_cost && <p className="text-xs text-red-600">{state.fieldErrors.agreed_cost[0]}</p>}
             </div>
             <div className="space-y-2">
-              <label htmlFor={"worker-status-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Status</label>
-              <select id={"worker-status-" + (allocationId ?? "new")} name="status" defaultValue={asText(submitted?.status, initialValues?.status ?? "assigned")} className={fieldClass}>
-                {ASSIGNMENT_WORKER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+              <label htmlFor={"worker-currency-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Currency *</label>
+              <select id={"worker-currency-" + (allocationId ?? "new")} name="currency" defaultValue={allocationCurrency} className={fieldClass}>
+                {(COMMON_CURRENCIES.includes(allocationCurrency as (typeof COMMON_CURRENCIES)[number]) ? COMMON_CURRENCIES : [allocationCurrency, ...COMMON_CURRENCIES]).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
+              {state.fieldErrors?.currency && <p className="text-xs text-red-600">{state.fieldErrors.currency[0]}</p>}
             </div>
-            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">{editing && allocationCurrency !== "INR" ? `This existing allocation remains in ${allocationCurrency}.` : "Agreed costs are recorded in INR for the current workflow."}</div>
+            {editing ? (
+              <div className="space-y-2">
+                <label htmlFor={"worker-status-" + allocationId} className="block text-sm font-medium text-slate-700">Status</label>
+                <select id={"worker-status-" + allocationId} name="status" defaultValue={asText(submitted?.status, initialValues?.status ?? "assigned")} className={fieldClass}>
+                  {ASSIGNMENT_WORKER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                </select>
+              </div>
+            ) : (
+              <input type="hidden" name="status" value="assigned" />
+            )}
 
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor={"worker-notes-" + (allocationId ?? "new")} className="block text-sm font-medium text-slate-700">Notes</label>

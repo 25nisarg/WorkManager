@@ -41,7 +41,7 @@ function localDateTimeToIso(value: string, timezoneOffset: number) {
 function allocationPayload(input: AssignmentWorkerInput) {
   return {
     worker_id: input.worker_id,
-    work_description: input.work_description,
+    work_description: input.work_description || null,
     assigned_date: input.assigned_date,
     worker_deadline: localDateTimeToIso(
       input.worker_deadline,
@@ -167,10 +167,9 @@ export async function createAssignmentWorker(
 
   const values = formValues(formData);
   values.assigned_date = new Date().toISOString().slice(0, 10);
-  values.currency = "INR";
-  values.delivered_at = ["delivered", "completed"].includes(values.status)
-    ? new Date().toISOString().slice(0, 16)
-    : "";
+  values.currency = values.currency || "INR";
+  values.status = "assigned";
+  values.delivered_at = "";
   const parsed = assignmentWorkerSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
@@ -311,7 +310,6 @@ export async function updateAssignmentWorker(
 
   const payload = allocationPayload(parsed.data);
   payload.assigned_date = allocationResult.data.assigned_date;
-  payload.currency = allocationResult.data.currency;
   payload.delivered_at = ["delivered", "completed"].includes(parsed.data.status)
     ? allocationResult.data.delivered_at ?? new Date().toISOString()
     : null;

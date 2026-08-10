@@ -151,6 +151,10 @@ export async function createAssignment(
   formData: FormData
 ): Promise<AssignmentActionState> {
   const values = formValues(formData);
+  // Creation has deterministic workflow defaults. These values are not
+  // accepted from the browser, even if a manipulated form submits them.
+  values.status = "new";
+  values.priority = values.priority || "normal";
   const parsed = assignmentSchema.safeParse(values);
   if (!parsed.success) {
     return invalidState(values, parsed.error.flatten().fieldErrors);
