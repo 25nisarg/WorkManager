@@ -38,16 +38,10 @@ export type DeadlineGroup = "overdue" | "today" | "three_days" | "later";
 export type DashboardDeadline = DashboardAssignment & { deadline_group: DeadlineGroup };
 
 export type ClientOutstandingItem = {
-  assignment_id: string;
-  task_code: string;
-  title: string;
-  client_name: string | null;
-  client_deadline: string | null;
-  currency: string;
-  selling_price: number;
-  client_received: number;
-  client_outstanding: number;
-  unmatched_payment_count: number;
+  contact_id: string;
+  client_name: string;
+  outstanding: CurrencyAmount[];
+  open_assignments: number;
 };
 
 export type WriterPayableItem = {

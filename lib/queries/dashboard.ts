@@ -12,6 +12,11 @@ type ClientPaymentRow = { id: string; payment_date: string; amount_original: num
 type ClientAllocationRow = { client_payment_id: string; assignment_id: string; amount_original: number | string; amount_inr: number | string };
 type WorkerPaymentRow = { assignment_worker_id: string; payment_date: string; amount: number | string; currency: string };
 type ExpenseRow = { assignment_id: string | null; expense_date: string; amount: number | string; currency: string };
+type AssignmentFinancialRow = {
+  assignment_id: string;
+  quoted_currency: string;
+  client_outstanding_in_assignment_currency: number | string;
+};
 
 const assignmentColumns = "id, received_from_id, task_code, title, client_deadline, selling_price, currency, status, priority, work_mode, created_at";
 
@@ -41,7 +46,7 @@ function logError(source: string, error: { code?: string; message?: string }) {
 
 export async function getDashboardData(ownerId: string): Promise<DashboardData> {
   const supabase = await createClient();
-  const [assignmentResult, contactResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult] = await Promise.all([
+  const [assignmentResult, contactResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult, financialSummaryResult] = await Promise.all([
     supabase.from("assignments").select(assignmentColumns).eq("owner_id", ownerId).order("created_at", { ascending: false }),
     supabase.from("contacts").select("id, name").eq("owner_id", ownerId),
     supabase.from("assignment_workers").select("id, assignment_id, worker_id, agreed_cost, currency, status").eq("owner_id", ownerId),
@@ -49,6 +54,11 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
     supabase.from("client_payment_allocations").select("client_payment_id, assignment_id, amount_original, amount_inr").eq("owner_id", ownerId),
     supabase.from("worker_payments").select("assignment_worker_id, payment_date, amount, currency").eq("owner_id", ownerId),
     supabase.from("expenses").select("assignment_id, expense_date, amount, currency").eq("owner_id", ownerId),
+    supabase
+      .from("assignment_financial_summary")
+      .select("assignment_id, quoted_currency, client_outstanding_in_assignment_currency")
+      .eq("owner_id", ownerId)
+      .gt("client_outstanding_in_assignment_currency", 0),
   ]);
   const errors: DashboardData["errors"] = {};
   const failed = [assignmentResult, contactResult, workerResult, clientPaymentResult, clientAllocationResult, workerPaymentResult, expenseResult].find((result) => result.error);
@@ -58,6 +68,10 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
     errors.assignments = "Assignment activity is temporarily unavailable.";
     errors.balances = "Outstanding balances are temporarily unavailable.";
     errors.charts = "Monthly cash trends are temporarily unavailable.";
+  }
+  if (financialSummaryResult.error) {
+    logError("outstanding_client_balances", financialSummaryResult.error);
+    errors.balances = "Outstanding client balances are temporarily unavailable.";
   }
 
   const contacts = new Map(((contactResult.data ?? []) as ContactRow[]).map((row) => [row.id, row.name]));
@@ -141,7 +155,38 @@ export async function getDashboardData(ownerId: string): Promise<DashboardData> 
 
   const now = new Date();
   const deadlines: DashboardDeadline[] = assignments.filter((row) => row.client_deadline && isActiveAssignmentStatus(row.status)).sort((a, b) => a.client_deadline!.localeCompare(b.client_deadline!)).slice(0, 8).map((row) => ({ ...row, deadline_group: deadlineGroup(row.client_deadline!, now) }));
-  const outstandingClients: ClientOutstandingItem[] = assignments.map((assignment) => ({ assignment_id: assignment.id, task_code: assignment.task_code, title: assignment.title, client_name: assignment.client_name, client_deadline: assignment.client_deadline, currency: assignment.currency, selling_price: assignment.selling_price, client_received: receivedByAssignment.get(assignment.id) ?? 0, client_outstanding: Math.max(assignment.selling_price - (receivedByAssignment.get(assignment.id) ?? 0), 0), unmatched_payment_count: unmatchedByAssignment.get(assignment.id) ?? 0 })).filter((row) => row.client_outstanding > 0).sort((a, b) => (a.client_deadline ?? "9999").localeCompare(b.client_deadline ?? "9999")).slice(0, 6);
+  const outstandingByContact = new Map<
+    string,
+    { name: string; totals: Map<string, number>; assignmentIds: Set<string> }
+  >();
+  for (const row of (financialSummaryResult.data ?? []) as AssignmentFinancialRow[]) {
+    const assignment = assignmentsById.get(row.assignment_id);
+    if (!assignment || assignment.status === "cancelled" || !assignment.received_from_id) continue;
+    const current = outstandingByContact.get(assignment.received_from_id) ?? {
+      name: assignment.client_name ?? "Unavailable contact",
+      totals: new Map<string, number>(),
+      assignmentIds: new Set<string>(),
+    };
+    addCurrencyAmount(
+      current.totals,
+      row.quoted_currency,
+      row.client_outstanding_in_assignment_currency
+    );
+    current.assignmentIds.add(assignment.id);
+    outstandingByContact.set(assignment.received_from_id, current);
+  }
+  const outstandingClients: ClientOutstandingItem[] = [...outstandingByContact.entries()]
+    .map(([contactId, value]) => ({
+      contact_id: contactId,
+      client_name: value.name,
+      outstanding: currencyAmounts(value.totals),
+      open_assignments: value.assignmentIds.size,
+    }))
+    .sort(
+      (a, b) =>
+        b.open_assignments - a.open_assignments ||
+        a.client_name.localeCompare(b.client_name)
+    );
 
   const workerNames = new Map<string, string[]>();
   for (const row of activeWorkers) { const names = workerNames.get(row.assignment_id) ?? []; const name = contacts.get(row.worker_id); if (name && !names.includes(name)) names.push(name); workerNames.set(row.assignment_id, names); }
